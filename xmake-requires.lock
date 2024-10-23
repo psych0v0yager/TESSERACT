@@ -27,6 +27,22 @@
             },
             version = "24.2.0"
         },
+        ["libcurl#31fecfc4"] = {
+            repo = {
+                branch = "master",
+                commit = "e260b41043949f32621200b2f666903129c863ee",
+                url = "https://gitlab.com/tboox/xmake-repo.git"
+            },
+            version = "8.7.1"
+        },
+        ["nlohmann_json#31fecfc4"] = {
+            repo = {
+                branch = "master",
+                commit = "e260b41043949f32621200b2f666903129c863ee",
+                url = "https://gitlab.com/tboox/xmake-repo.git"
+            },
+            version = "v3.11.3"
+        },
         ["spdlog#9c36f0a9"] = {
             repo = {
                 branch = "master",

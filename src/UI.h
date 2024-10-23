@@ -1,4 +1,5 @@
 #pragma once
+#include "SKSEMenuFramework.h"
 
 namespace UI {
     void Register();

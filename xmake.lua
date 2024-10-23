@@ -30,6 +30,10 @@ set_config("skyrim_vr", false)
 
 -- targets
 target("TESSERACT")
+    -- add definitions for Unicode
+    add_defines("UNICODE", "_UNICODE", "_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING")
+
+    
     -- add dependencies to target
     add_deps("commonlibsse-ng")
     add_packages("nlohmann_json")
@@ -39,7 +43,7 @@ target("TESSERACT")
     add_rules("commonlibsse-ng.plugin", {
         name = "TESSERACT",
         author = "psych0v0yager",
-        description = "The Elder Scrolls System & Environment for Real-time Autonomous Character Toolkit"
+        description = "The Elder Scrolls System & Environment for Real-time Autonomous Character Technology"
     })
 
     -- add src files
@@ -47,7 +51,7 @@ target("TESSERACT")
     add_headerfiles("src/**.h")
     add_includedirs("src")
     add_includedirs("lib/openai-cpp/include")  -- OpenAI-cpp include directory
-    add_includedirs("lib/SKSE-Menu-Framework-2-Example/include")  -- Path to the specific header in the submodule
+    add_includedirs("lib/SKSE-Menu-Framework-2-Example/include")  -- SKSE Menu Framework include
     set_pcxxheader("src/pch.h")
 
     -- platform specific flags
@@ -57,7 +61,7 @@ target("TESSERACT")
         add_cxflags("-Wno-error")  -- GCC/Clang to not treat warnings as errors
     end
 
-    -- copy build files to MODS or GAME paths (remove this if not needed)
+    -- copy build files
     after_build(function(target)
         local copy = function(env, ext)
             for _, env in pairs(env:split(";")) do
