@@ -1,0 +1,30 @@
+# IDE folders
+.vs/
+.vscode/
+.idea/
+
+# Build folders
+.xmake/
+build/
+vs*/
+out/
+bin/
+obj/
+
+# Build files
+*.dll
+*.exp
+*.ilk
+*.lib
+*.pdb
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.bak
+*.tmp
+*.temp
