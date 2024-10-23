@@ -1,9 +1,10 @@
-[submodule "lib/commonlibsse-ng"]
-	path = lib/commonlibsse-ng
-	url = https://github.com/CharmedBaryon/CommonLibSSE-NG.git
 [submodule "lib/openai-cpp"]
 	path = lib/openai-cpp
 	url = https://github.com/olrea/openai-cpp.git
 [submodule "lib/SKSE-Menu-Framework-2-Example"]
 	path = lib/SKSE-Menu-Framework-2-Example
 	url = https://github.com/Thiago099/SKSE-Menu-Framework-2-Example.git
+[submodule "lib/commonlibsse-ng"]
+	path = lib/commonlibsse-ng
+	url = https://github.com/alandtse/CommonLibVR.git
+	branch = ng
