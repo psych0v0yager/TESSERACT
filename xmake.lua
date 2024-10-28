@@ -21,6 +21,7 @@ set_defaultmode("releasedbg")
 -- add rules
 add_rules("mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
+add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
 
 -- set policies
 set_policy("package.requires_lock", true)

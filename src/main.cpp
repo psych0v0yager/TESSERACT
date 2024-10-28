@@ -1,9 +1,12 @@
+// main.cpp
 #include "pch.h"
-#include "UI.h"
+#include "UI.h"  // Make sure we include our UI header
 
 void OnMessage(SKSE::MessagingInterface::Message* message) {
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+        // Use single registration point
         UI::Register();
+        logger::info("TESSERACT UI components registered");
     }
 }
 
@@ -29,6 +32,12 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     spdlog::set_pattern("[%^%l%$] %v");
 
     logger::info("{} v{} loaded", plugin->GetName(), plugin->GetVersion());
+
+    // Register for SKSE messages
+    auto messaging = SKSE::GetMessagingInterface();
+    if (!messaging->RegisterListener(OnMessage)) {
+        return false;
+    }
 
     return true;
 }
