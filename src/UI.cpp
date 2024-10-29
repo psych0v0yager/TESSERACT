@@ -11,7 +11,14 @@ namespace UI {
         
         // This creates the menu entry you'll see when pressing Insert
         SKSEMenuFramework::SetSection("TESSERACT");
-        
+
+        // Force close windows when framework opens
+        // if (Dashboard::Window->IsOpen == true){
+        //     Dashboard::Window->IsOpen = false;
+        // };
+        // if (ChatWindow::Window->IsOpen == true){
+        //     ChatWindow::Window->IsOpen = false;
+        // };
 
         // This adds the Dashboard item under TESSERACT dropdown on the left column in the Mod Control Panel
         SKSEMenuFramework::AddSectionItem("Dashboard", []() {
@@ -58,25 +65,18 @@ namespace UI {
                 // Menu Bar
                 if (ImGui::BeginMenuBar()) {
 
-                    // Close button on top right corner
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.0f, 0.0f, 1.0f));  // Red
-                    if (ImGui::SmallButton("X")) {
-                        Window->IsOpen = false;
-                    }
-                    ImGui::PopStyleColor();
-
                     // View Menu
+                    FontAwesome::PushSolid();
                     if (ImGui::BeginMenu("View")) {
-                        FontAwesome::PushSolid();
                         if (ImGui::MenuItem((Glyphs::RefreshIcon + " Refresh").c_str())) {
                             // Refresh dashboard data
                         }
                         if (ImGui::MenuItem((Glyphs::CloseIcon + " Close").c_str())) {
                             Window->IsOpen = false;
                         }
-                        FontAwesome::Pop();
                         ImGui::EndMenu();
                     }
+                    FontAwesome::Pop();
                     
                     // Settings Menu
                     FontAwesome::PushSolid();
