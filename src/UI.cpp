@@ -3,12 +3,37 @@
 namespace UI {
     void Register() {
         if (!SKSEMenuFramework::IsInstalled()) {
+            logger::error("SKSE Menu Framework not found!");
             return;
         }
+        
+        logger::info("Setting up TESSERACT menu section...");
+        
+        // This creates the menu entry you'll see when pressing Insert
         SKSEMenuFramework::SetSection("TESSERACT");
+        
+
+        // This adds the Dashboard item under TESSERACT dropdown on the left column in the Mod Control Panel
+        SKSEMenuFramework::AddSectionItem("Dashboard", []() {
+                    Dashboard::Window->IsOpen = true;
+        
+        });
+
+        // This adds the Settings item under TESSERACT dropdown on the left column in the Mod Control Panel
+        SKSEMenuFramework::AddSectionItem("Settings", Settings::RenderMenu);
+        
+        // This adds the ChatWindow item under TESSERACT dropdown on the left column in the Mod Control Panel
+        SKSEMenuFramework::AddSectionItem("Debug Chat", []() {
+            ChatWindow::Open(nullptr);  // Open with no NPC for testing
+        });
+
+        // Register windows (but don't show them yet)
         Dashboard::Register();
         ChatWindow::Register();
-    }
+        
+        logger::info("Menu section and components registered");
+     }
+
 
     namespace Dashboard {
         void Register() {
@@ -26,11 +51,20 @@ namespace UI {
             ImGui::SetNextWindowSize(ImVec2{viewport->Size.x * 0.6f, viewport->Size.y * 0.7f}, ImGuiCond_Appearing);
             
             FontAwesome::PushSolid();
+
             if (ImGui::Begin(Glyphs::DashboardTitle.c_str(), nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse)) {
                 FontAwesome::Pop();
 
                 // Menu Bar
                 if (ImGui::BeginMenuBar()) {
+
+                    // Close button on top right corner
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.0f, 0.0f, 1.0f));  // Red
+                    if (ImGui::SmallButton("X")) {
+                        Window->IsOpen = false;
+                    }
+                    ImGui::PopStyleColor();
+
                     // View Menu
                     if (ImGui::BeginMenu("View")) {
                         FontAwesome::PushSolid();
