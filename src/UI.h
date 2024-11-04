@@ -7,14 +7,20 @@
 #include <vector>
 #include <string>
 #include <format>
+#include <filesystem>  // For filesystem operations
+#include <fstream>    // For file I/O
+#include <atomic>  // For std::atomic operations
 
 namespace UI {
     // Global registration for all UI components
     void Register();
 
     namespace Dashboard {
+        // Dashboard Register function
+        void __stdcall RenderMenuItem();  // New render function for menu item
+
         // Window handle
-        inline MENU_WINDOW Window;
+        inline MENU_WINDOW dashboardWindow;
 
         // Glyphs definitions for icons
         namespace Glyphs {
@@ -38,6 +44,9 @@ namespace UI {
     }
 
     namespace ChatWindow {
+        // Chat Window Register function
+        void __stdcall RenderMenuItem();  // New render function for menu item
+
         // Types and structures
         struct ChatMessage {
             enum class Sender { User, NPC };
@@ -47,13 +56,15 @@ namespace UI {
         };
 
         // Window and UI state
-        inline MENU_WINDOW Window;
-        inline bool autoScroll = true;
+        inline MENU_WINDOW chatWindow;
+        // inline bool autoScroll = true;
+        inline std::atomic<bool> autoScroll{true};
         inline std::vector<ChatMessage> chatHistory;
         inline char inputBuffer[1024] = {0};
         
         // Async state
-        inline bool isThinking = false;
+        // inline bool isThinking = false;
+        inline std::atomic<bool> isThinking{false};        // Was: inline bool isThinking = false;
         inline std::chrono::steady_clock::time_point thinkingAnimationTimer;
         inline std::future<std::string> aiResponseFuture;
         
@@ -61,8 +72,29 @@ namespace UI {
         inline RE::Actor* currentNPC = nullptr;
 
         // OpenAI integration
-        inline bool openaiInitialized = false;
-        
+        inline std::string openaiURL = "";
+        inline std::string openaiAPIKey = "";
+        // inline bool openaiInitialized = false;
+        inline std::atomic<bool> openaiInitialized{false}; // Was: inline bool openaiInitialized = false;
+
+        // Config data structure
+        namespace Config {
+            // Path to config file
+            inline const std::string CONFIG_PATH = "Data\\SKSE\\Plugins\\TESSERACT\\config.json";
+            
+            // Status tracking for UI feedback
+            inline bool loadSuccess = false;
+            inline std::string lastError = "";
+            
+            // Configuration functions
+            void LoadConfig();
+            void SaveConfig();
+            void EnsureConfigDirectory();
+            
+            // Helper to get formatted error messages
+            std::string GetErrorMessage();
+        }
+ 
         // Chat context/memory management
         namespace Context {
             inline std::vector<nlohmann::json> messages;
@@ -79,7 +111,8 @@ namespace UI {
         void Close();
         
         // OpenAI related functions
-        void SetAPIKey(const std::string& key);
+        // void SetAPIKey(const std::string& key);
+        void StartOpenAI(const std::string& url, const std::string& key);
         std::string SendOpenAIRequest(const std::string& userInput);
         std::string GenerateSystemPrompt();
         std::string GetNPCContext();
