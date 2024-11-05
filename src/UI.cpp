@@ -32,7 +32,7 @@ namespace UI {
 
         // Try to load config and connect to OpenAI on startup
         try {
-            ChatWindow::Config::LoadConfig();  // This already attempts connection if config exists
+            Config::LoadConfig();  // Now using UI::Config instead of ChatWindow::Config
             logger::info("Initial config load complete");
         }
         catch (const std::exception& e) {
@@ -50,8 +50,310 @@ namespace UI {
         // Register windows
         Dashboard::Register();
         ChatWindow::Register();
+        NPCDetails::Register();  // Make sure this is added
         
         logger::info("Menu section and components registered");
+    }
+
+
+    namespace Config {
+        void EnsureConfigDirectory() {
+            try {
+                std::filesystem::path configPath(CONFIG_PATH);
+                auto parent = configPath.parent_path();
+                if (!std::filesystem::exists(parent)) {
+                    std::filesystem::create_directories(parent);
+                }
+            } catch (const std::exception& e) {
+                lastError = std::format("Failed to create config directory: {}", e.what());
+                loadSuccess = false;
+                logger::error("{}", lastError);
+            }
+        }
+
+        void LoadConfig() {
+            try {
+                // Reset status
+                loadSuccess = false;
+                lastError = "";
+
+                // Ensure directory exists
+                EnsureConfigDirectory();
+
+                // Check if file exists
+                if (!std::filesystem::exists(CONFIG_PATH)) {
+                    logger::info("No config file found. Will create on first save.");
+                    return;
+                }
+
+                // Read and parse file
+                std::ifstream file(CONFIG_PATH);
+                if (!file.is_open()) {
+                    throw std::runtime_error("Cannot open config file");
+                }
+
+                auto config = nlohmann::json::parse(file);
+                
+                // Load component-specific configurations
+                Dashboard::LoadFromConfig(config);
+                OpenAI::LoadFromConfig(config);
+                Chat::LoadFromConfig(config);
+
+                loadSuccess = true;
+                logger::info("Config loaded successfully");
+
+                // Try to establish OpenAI connection if credentials exist
+                if (!OpenAI::baseUrl.empty() && !OpenAI::apiKey.empty()) {
+                    OpenAI::StartConnection();
+                }
+            }
+            catch (const std::exception& e) {
+                lastError = std::format("Failed to load config: {}", e.what());
+                loadSuccess = false;
+                logger::error("{}", lastError);
+            }
+        }
+
+        void SaveConfig() {
+            try {
+                // Ensure directory exists
+                EnsureConfigDirectory();
+
+                // Create config object
+                nlohmann::json config;
+                
+                // Save component-specific configurations
+                Dashboard::SaveToConfig(config);
+                OpenAI::SaveToConfig(config);
+                Chat::SaveToConfig(config);
+
+                // Write to file
+                std::ofstream file(CONFIG_PATH);
+                if (!file.is_open()) {
+                    throw std::runtime_error("Cannot open config file for writing");
+                }
+                
+                file << config.dump(2);  // Pretty print with 2-space indent
+                loadSuccess = true;
+                lastError = "";
+                logger::info("Config saved successfully");
+            }
+            catch (const std::exception& e) {
+                lastError = std::format("Failed to save config: {}", e.what());
+                loadSuccess = false;
+                logger::error("{}", lastError);
+            }
+        }
+
+        std::string GetErrorMessage() {
+            return lastError.empty() ? "No errors" : lastError;
+        }
+
+        // Dashboard config implementation
+        namespace Dashboard {
+            void SaveToConfig(nlohmann::json& config) {
+                config["dashboard"] = {
+                    {"npcCount", npcCount}
+                };
+            }
+
+            void LoadFromConfig(const nlohmann::json& config) {
+                if (config.contains("dashboard")) {
+                    const auto& dashboard = config["dashboard"];
+                    if (dashboard.contains("npcCount")) {
+                        npcCount = dashboard["npcCount"].get<int>();
+                    }
+                }
+            }
+        }
+
+        // OpenAI config implementation
+        namespace OpenAI {
+            void SaveToConfig(nlohmann::json& config) {
+                if (!baseUrl.empty() || !apiKey.empty()) {
+                    config["openai"] = {
+                        {"baseUrl", baseUrl},
+                        {"apiKey", apiKey}
+                    };
+                }
+            }
+
+            void LoadFromConfig(const nlohmann::json& config) {
+                if (config.contains("openai")) {
+                    const auto& openai = config["openai"];
+                    if (openai.contains("baseUrl")) {
+                        baseUrl = openai["baseUrl"].get<std::string>();
+                    }
+                    if (openai.contains("apiKey")) {
+                        apiKey = openai["apiKey"].get<std::string>();
+                    }
+                }
+            }
+
+            void StartConnection() {
+                try {
+                    openai::start(apiKey, "", true, baseUrl);
+                    initialized.store(true);
+                    logger::info("Successfully connected to OpenAI API");
+                }
+                catch (const std::exception& e) {
+                    UI::Config::lastError = std::format("Failed to connect to OpenAI: {}", e.what());
+                    UI::Config::loadSuccess = false;
+                    logger::error("{}", UI::Config::lastError);
+                }
+            }
+        }
+
+        // Chat config implementation
+        namespace Chat {
+            void SaveToConfig(nlohmann::json& config) {
+                config["chat"] = {
+                    {"maxMessages", maxMessages}
+                };
+            }
+
+            void LoadFromConfig(const nlohmann::json& config) {
+                if (config.contains("chat")) {
+                    const auto& chat = config["chat"];
+                    if (chat.contains("maxMessages")) {
+                        maxMessages = chat["maxMessages"].get<size_t>();
+                    }
+                }
+            }
+        }
+    }
+
+    namespace NPCDetails {
+        // UI Drawing helpers
+        namespace Drawing {
+            void DrawNPCInfo() {
+                // Create columns for portrait and info
+                ImGui::Columns(2, "npc_info_columns", false);
+                ImGui::SetColumnWidth(0, 160);  // Portrait column width
+
+                // Left column: Portrait
+                ImGui::BeginChild("Portrait", ImVec2(150, 150), true);
+                ImGui::Text("[Portrait]");  // Placeholder for NPC portrait
+                ImGui::EndChild();
+
+                // Right column: Info list
+                ImGui::NextColumn();
+                ImGui::BeginGroup();
+                ImGui::TextWrapped("Name: %s", "NPC Name");  // TODO: Get from JSON
+                ImGui::TextWrapped("Race: %s", "Race");
+                ImGui::TextWrapped("Level: %d", 1);
+                ImGui::TextWrapped("Residence: %s", "Location");
+                ImGui::TextWrapped("Relationship: %s", "None");
+                ImGui::TextWrapped("Constitution: %s", "Normal");
+                ImGui::EndGroup();
+
+                ImGui::Columns(1);  // Reset columns
+            }
+
+            void DrawExperiencerContext() {
+                ImGui::TextWrapped("Experiencer agent context and history will be displayed here.");
+                // TODO: Add context history display
+                // Example layout for context history:
+                ImGui::BeginChild("ExperiencerHistory", ImVec2(0, 0), true);
+                for (int i = 0; i < 10; i++) {
+                    ImGui::TextWrapped("Sample context entry %d", i);
+                    ImGui::Separator();
+                }
+                ImGui::EndChild();
+            }
+
+            void DrawNarratorContext() {
+                ImGui::TextWrapped("Narrator agent context and history will be displayed here.");
+                // TODO: Add context history display
+                ImGui::BeginChild("NarratorHistory", ImVec2(0, 0), true);
+                for (int i = 0; i < 10; i++) {
+                    ImGui::TextWrapped("Sample narrative entry %d", i);
+                    ImGui::Separator();
+                }
+                ImGui::EndChild();
+            }
+
+            void DrawPhysicalAgentContext() {
+                ImGui::TextWrapped("Physical agent context and history will be displayed here.");
+                // TODO: Add context history display
+                ImGui::BeginChild("PhysicalAgentHistory", ImVec2(0, 0), true);
+                for (int i = 0; i < 10; i++) {
+                    ImGui::TextWrapped("Sample physical state entry %d", i);
+                    ImGui::Separator();
+                }
+                ImGui::EndChild();
+            }
+        }
+
+        void Open(int npcId) {
+            selectedNpcId = npcId;
+            detailsWindow->IsOpen = true;
+            logger::info("Opening NPC Details window for NPC {}", npcId);
+        }
+
+        void Close() {
+            detailsWindow->IsOpen = false;
+            selectedNpcId = -1;
+            logger::info("Closing NPC Details window");
+        }
+
+        void Register() {
+            detailsWindow = SKSEMenuFramework::AddWindow(RenderWindow);
+            logger::info("NPC Details window registered");
+        }
+
+        void __stdcall RenderWindow() {
+            if (selectedNpcId == -1) {
+                detailsWindow->IsOpen = false;
+                return;
+            }
+
+            auto viewport = ImGui::GetMainViewport();
+            
+            // Size and position
+            float windowWidth = viewport->Size.x * 0.3f;   // 30% of screen width
+            float windowHeight = viewport->Size.y * 0.7f;  // 70% of screen height
+
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Appearing);
+            ImGui::SetNextWindowPos(
+                ImVec2(viewport->Size.x * 0.35f, viewport->Size.y * 0.15f), 
+                ImGuiCond_Appearing,
+                ImVec2(0.0f, 0.0f)
+            );
+
+            bool isOpen = detailsWindow->IsOpen;
+            if (ImGui::Begin(std::format("NPC {} Details##NPCDetails", selectedNpcId).c_str(), 
+                           &isOpen, 
+                           ImGuiWindowFlags_NoCollapse)) {
+
+                // Begin tab bar at the bottom
+                if (ImGui::BeginTabBar("AgentTabs", TAB_FLAGS)) {
+                    if (ImGui::BeginTabItem("Info")) {
+                        Drawing::DrawNPCInfo();
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Experiencer")) {
+                        Drawing::DrawExperiencerContext();
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Narrator")) {
+                        Drawing::DrawNarratorContext();
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Agent")) {
+                        Drawing::DrawPhysicalAgentContext();
+                        ImGui::EndTabItem();
+                    }
+                    ImGui::EndTabBar();
+                }
+            }
+            ImGui::End();
+
+            if (detailsWindow->IsOpen != isOpen) {
+                if (!isOpen) Close();
+                detailsWindow->IsOpen = isOpen;
+            }
+        }
     }
 
 
@@ -75,18 +377,21 @@ namespace UI {
             // Load the atomic IsOpen value into a local bool
             bool isOpen = dashboardWindow->IsOpen.load();
 
-            // Pass &isOpen to ImGui::Begin()
-            // if (ImGui::Begin("Dialogue##ChatWindow", &isOpen, ImGuiWindowFlags_MenuBar)) {
-            
-            if (ImGui::Begin(Glyphs::DashboardTitle.c_str(), &isOpen, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse)) {
+            // Calculate split point for the two columns
+            int halfCount = (Config::Dashboard::npcCount + 1) / 2;  // Rounds up for odd numbers
 
-            // if (ImGui::Begin(Glyphs::DashboardTitle.c_str(), nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse)) {
+
+
+            // This is the Top Row (The title bar)
+            if (ImGui::Begin("NPC Dashboard", &isOpen, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse)) {
+
                 FontAwesome::Pop();
 
-                // Menu Bar
+                // This is the row under the title bar, the menu bar
                 if (ImGui::BeginMenuBar()) {
 
-                    // View Menu
+                    //|||| Reorganized menu bar with View on left, NPC count center, Status right
+                    // Left - View Menu
                     FontAwesome::PushSolid();
                     if (ImGui::BeginMenu("View")) {
                         if (ImGui::MenuItem((Glyphs::RefreshIcon + " Refresh").c_str())) {
@@ -101,54 +406,87 @@ namespace UI {
                     FontAwesome::Pop();
                                         
                     ImGui::EndMenuBar();
+
                 }
 
-                // Main content area
-                ImGui::Columns(2, "dashboard_columns", true);
-                
-                // Left column: NPC List
-                FontAwesome::PushSolid();
-                ImGui::Text("%s Active LLM NPCs: %d", Glyphs::NPCIcon.c_str(), State::activeNPCCount);
-                FontAwesome::Pop();
 
-                ImGui::BeginChild("NPCList", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
+                // Main content area
+                ImGui::Columns(2, "npc_columns", true);
+
+                // Create ImVec2 to store region size
+                auto availableRegion = ImGui::ImVec2Manager::Create();
+
+                // Get available region size
+                ImGui::GetContentRegionAvail(availableRegion);
+
+                // Calculate available height for the lists
+                float listHeight = availableRegion->y - ImGui::GetFrameHeightWithSpacing();
+
+                // Clean up
+                ImGui::ImVec2Manager::Destroy(availableRegion);
+
+
+                // First NPC List column
+                ImGui::BeginChild("NPCList1", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
                 FontAwesome::PushSolid();
-                for (int i = 0; i < 5; i++) {
-                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i)).c_str(), false, 0, ImVec2(0,0))) {
-                        // Handle NPC selection
+
+                for (int i = 0; i < halfCount; i++) {
+                    bool isSelected = NPCDetails::selectedNpcId == i + 1;
+                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
+                        logger::debug("Selected NPC {} from first column", i + 1);
+                        NPCDetails::Open(i + 1);
+                    }
+
+                }
+
+
+                FontAwesome::Pop();
+                ImGui::EndChild();
+
+                // Second NPC List column
+                ImGui::NextColumn();
+                ImGui::BeginChild("NPCList2", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
+                FontAwesome::PushSolid();
+
+                for (int i = halfCount; i < Config::Dashboard::npcCount; i++) {
+                    bool isSelected = NPCDetails::selectedNpcId == i + 1;
+                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
+                        logger::debug("Selected NPC {} from first column", i + 1);
+                        NPCDetails::Open(i + 1);
                     }
                 }
                 FontAwesome::Pop();
                 ImGui::EndChild();
-                
-                // Right column: Map
-                ImGui::NextColumn();
-                
-                FontAwesome::PushSolid();
-                ImGui::Text("%s Local Map", Glyphs::MapIcon.c_str());
-                FontAwesome::Pop();
-
-                ImGui::BeginChild("Map", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
-                // Map visualization will go here
-                ImGui::EndChild();
 
                 ImGui::Columns(1);
 
-                // Status bar
+                // Add some padding before status bar
+                ImGui::Spacing();
+                ImGui::Spacing();
+
+                // // Status bar with both elements
+                // Simple status bar
                 ImGui::Separator();
+                // FontAwesome::PushSolid();
+                // ImGui::Text("%s Active LLM NPCs: %d", Glyphs::NPCIcon.c_str(), State::activeNPCCount);
+                // ImGui::SameLine();
+                // ImGui::Text("%s Status: Active", Glyphs::ActiveIcon.c_str());
+                // FontAwesome::Pop();
+
                 FontAwesome::PushSolid();
-                ImGui::Text("%s Status: Active", Glyphs::ActiveIcon.c_str());
+                if (ImGui::BeginTable("status_bar", 2)) {  // 2 columns
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%s Active LLM NPCs: %d", Glyphs::NPCIcon.c_str(), State::activeNPCCount);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%s Status: Active", Glyphs::ActiveIcon.c_str());
+                    ImGui::EndTable();
+                }
                 FontAwesome::Pop();
+
             }
             ImGui::End();
 
             // Update the global IsOpen state
-            // Window->IsOpen.store(isOpen);
-            // Update global state if changed
-            // if (dashboardWindow->IsOpen.load() != isOpen) {
-            //     dashboardWindow->IsOpen.store(isOpen);
-            // }
-
             if (dashboardWindow->IsOpen.load() != isOpen) {
                 logger::info("Dashboard window state changed: {} -> {}", 
                     dashboardWindow->IsOpen.load(), isOpen);
@@ -158,135 +496,6 @@ namespace UI {
     }
 
     namespace ChatWindow {
-
-        // Config boilerplate
-        namespace Config {
-            void EnsureConfigDirectory() {
-                try {
-                    std::filesystem::path configPath(CONFIG_PATH);
-                    auto parent = configPath.parent_path();
-                    if (!std::filesystem::exists(parent)) {
-                        std::filesystem::create_directories(parent);
-                    }
-                } catch (const std::exception& e) {
-                    lastError = std::format("Failed to create config directory: {}", e.what());
-                    loadSuccess = false;
-                    logger::error("{}", lastError);
-                }
-            }
-
-            void LoadConfig() {
-                try {
-                    // Reset status
-                    loadSuccess = false;
-                    lastError = "";
-
-                    // Ensure directory exists
-                    EnsureConfigDirectory();
-
-                    // Check if file exists
-                    if (!std::filesystem::exists(CONFIG_PATH)) {
-                        logger::info("No config file found. Will create on first save.");
-                        return;
-                    }
-
-                    // Read and parse file
-                    std::ifstream file(CONFIG_PATH);
-                    if (!file.is_open()) {
-                        throw std::runtime_error("Cannot open config file");
-                    }
-
-                    auto config = nlohmann::json::parse(file);
-                    
-                    // Load values if they exist and aren't empty
-                    if (config.contains("openai")) {
-                        const auto& openai = config["openai"];
-                        
-                        // Only override if values are empty or we're loading for first time
-                        if (openaiURL.empty() && openai.contains("baseUrl")) {
-                            openaiURL = openai["baseUrl"].get<std::string>();
-                        }
-                        if (openaiAPIKey.empty() && openai.contains("apiKey")) {
-                            openaiAPIKey = openai["apiKey"].get<std::string>();
-                        }
-                    }
-
-                    loadSuccess = true;
-                    logger::info("Config loaded successfully");
-
-                    // Try to connect if we have both values
-                    // if (!openaiURL.empty() && !openaiAPIKey.empty() && !openaiInitialized) {
-                    if (!openaiURL.empty() && !openaiAPIKey.empty() && !openaiInitialized.load()) {
-                        StartOpenAI(openaiURL, openaiAPIKey);
-                    }
-                }
-                catch (const std::exception& e) {
-                    lastError = std::format("Failed to load config: {}", e.what());
-                    loadSuccess = false;
-                    logger::error("{}", lastError);
-                }
-            }
-
-            void SaveConfig() {
-                try {
-                    // Ensure directory exists
-                    EnsureConfigDirectory();
-
-                    // Create config object
-                    nlohmann::json config;
-                    
-                    // Only save non-empty values
-                    if (!openaiURL.empty() || !openaiAPIKey.empty()) {
-                        config["openai"] = {
-                            {"baseUrl", openaiURL},
-                            {"apiKey", openaiAPIKey}
-                        };
-                    }
-
-                    // Write to file
-                    std::ofstream file(CONFIG_PATH);
-                    if (!file.is_open()) {
-                        throw std::runtime_error("Cannot open config file for writing");
-                    }
-                    
-                    file << config.dump(2);  // Pretty print with 2-space indent
-                    loadSuccess = true;
-                    lastError = "";
-                    logger::info("Config saved successfully");
-                }
-                catch (const std::exception& e) {
-                    lastError = std::format("Failed to save config: {}", e.what());
-                    loadSuccess = false;
-                    logger::error("{}", lastError);
-                }
-            }
-
-            std::string GetErrorMessage() {
-                return lastError.empty() ? "No errors" : lastError;
-            }
-        }
-
-        // Update StartOpenAI to handle configuration
-        void StartOpenAI(const std::string& url, const std::string& key) {
-            try {
-                openai::start(key, "", true, url);
-                // openaiInitialized = true;
-                openaiInitialized.store(true);
-                
-                // Save successful configuration
-                openaiURL = url;
-                openaiAPIKey = key;
-                Config::SaveConfig();
-                
-                logger::info("Successfully connected to OpenAI API");
-            } 
-            catch (const std::exception& e) {
-                Config::lastError = std::format("Failed to connect to OpenAI: {}", e.what());
-                Config::loadSuccess = false;
-                logger::error("{}", Config::lastError);
-            }
-        }
-
 
         void Register() {
             chatWindow = SKSEMenuFramework::AddWindow(RenderWindow);
@@ -298,7 +507,7 @@ namespace UI {
             chatHistory.clear();
             // isThinking = false;
             isThinking.store(false);
-            
+
             if (currentNPC) {
                 Context::AddMessage("system", GenerateSystemPrompt());
                 chatHistory.push_back({
@@ -358,15 +567,6 @@ namespace UI {
 
 
         void __stdcall ChatWindow::RenderWindow() {
-            // auto viewport = ImGui::GetMainViewport();
-
-            // auto center = ImGui::ImVec2Manager::Create();
-            // ImGui::ImGuiViewportManager::GetCenter(center, viewport);
-            // ImGui::SetNextWindowPos(*center, ImGuiCond_Appearing, ImVec2{0.5f, 0.5f});
-            // ImGui::ImVec2Manager::Destroy(center);
-            
-            // ImGui::SetNextWindowSize(ImVec2{viewport->Size.x * 0.5f, viewport->Size.y * 0.6f}, ImGuiCond_Appearing);
-
             auto viewport = ImGui::GetMainViewport();
             
             // First, adjust the window size to be larger vertically
@@ -399,8 +599,8 @@ namespace UI {
                 }
 
                 // Add OpenAI connection status check
-                if (!openaiInitialized.load()) {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.855f, 0.392f, 0.392f, 1.0f)); // Light red
+                if (!UI::Config::OpenAI::initialized.load()) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.855f, 0.392f, 0.392f, 1.0f));
                     ImGui::TextWrapped("⚠️ Not connected to OpenAI. Please check your settings.");
                     if (ImGui::Button("Open Settings")) {
                         SKSEMenuFramework::SetSection("TESSERACT");
@@ -424,13 +624,6 @@ namespace UI {
                     const bool isUser = message.sender == ChatMessage::Sender::User;
                     ImGui::PushStyleColor(ImGuiCol_Text, 
                         isUser ? ImVec4(0.729f, 0.855f, 0.984f, 1.0f) : ImVec4(0.824f, 0.706f, 0.549f, 1.0f));
-                    
-                    // // Add sender name on its own line
-                    // ImGui::Text("%s:", message.GetSenderName().c_str());
-                    
-                    // // Add message content with text wrapping
-                    // ImGui::PushTextWrapPos(ImGui::GetWindowWidth() - 20.0f);  // Leave small margin
-                    // ImGui::TextUnformatted(message.content.c_str());  // TextUnformatted handles large texts better
                     
                     // Put sender and message on same line but wrap the text
                     ImGui::PushTextWrapPos(ImGui::GetWindowWidth() - 20.0f);
@@ -519,10 +712,12 @@ namespace UI {
 
 
         std::string SendOpenAIRequest(const std::string& userInput) {
-            if (!openaiInitialized.load()) {
+
+            //Update OpenAI check
+            if (!UI::Config::OpenAI::initialized.load()) {
                 return "I'm not connected to OpenAI yet. Please check your settings.";
             }
-            
+
             try {
                 Context::AddMessage("user", userInput);
 
@@ -562,7 +757,6 @@ namespace UI {
 
         void ProcessResponse() {
             if (!isThinking.load() || !aiResponseFuture.valid()) {  // Add .load()
-            // if (!isThinking || !aiResponseFuture.valid()) {
                 return;
             }
 
@@ -573,7 +767,6 @@ namespace UI {
                     ChatMessage::Sender::NPC,
                     response
                 });
-                // isThinking = false;
                 isThinking.store(false);  // Add .store()
                 autoScroll.store(true);  // Re-enable when receiving response
             }
@@ -588,9 +781,10 @@ namespace UI {
                 
                 messages.push_back(message);
                 
-                if (messages.size() > maxMessages) {
+                if (messages.size() > UI::Config::Chat::maxMessages) {
                     messages.erase(messages.begin());
                 }
+
             }
 
             nlohmann::json GetMessageHistory() {
@@ -599,71 +793,54 @@ namespace UI {
         }
     }
 
+    // Example of updated Settings menu with new config system
     namespace Settings {
         void __stdcall RenderMenu() {
             FontAwesome::PushSolid();
             ImGui::Text("%s TESSERACT Settings", Dashboard::Glyphs::SettingsIcon.c_str());
 
-            // Load config on first open
-            static bool configLoaded = false;
-            if (!configLoaded) {
-                ChatWindow::Config::LoadConfig();
-                configLoaded = true;
-            }
-
-            // Cache current values for detecting changes
-            static char baseURL[1024] = "";
-            static char apiKey[1024] = "";
+            // Dashboard Settings
+            ImGui::Separator();
+            ImGui::Text("Dashboard Settings");
             
-            // Update buffers if empty and we have saved values
-            if (strlen(baseURL) == 0 && !ChatWindow::openaiURL.empty()) {
-                strcpy_s(baseURL, sizeof(baseURL), ChatWindow::openaiURL.c_str());
-            }
-            if (strlen(apiKey) == 0 && !ChatWindow::openaiAPIKey.empty()) {
-                strcpy_s(apiKey, sizeof(apiKey), ChatWindow::openaiAPIKey.c_str());
-            }
-
-            // Input fields
-            bool urlChanged = ImGui::InputText("OpenAI Base URL", baseURL, sizeof(baseURL));
-            bool keyChanged = ImGui::InputText("OpenAI API Key", apiKey, sizeof(apiKey), 
-                                            ImGuiInputTextFlags_Password);
-
-            // Update stored values if changed
-            if (urlChanged) {
-                ChatWindow::openaiURL = baseURL;
-            }
-            if (keyChanged) {
-                ChatWindow::openaiAPIKey = apiKey;
+            int npcCount = Config::Dashboard::npcCount;
+            if (ImGui::InputInt("Number of NPCs", &npcCount)) {
+                // Clamp to reasonable values
+                npcCount = std::clamp(npcCount, 2, 200);
+                Config::Dashboard::npcCount = npcCount;
+                Config::SaveConfig();
             }
 
-            // Connect button
-            // if (ImGui::Button(ChatWindow::openaiInitialized ? 
-            if (ImGui::Button(ChatWindow::openaiInitialized.load() ? 
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Set the number of NPCs to display (2-200).\n"
+                                "NPCs will be split evenly between two columns.");
+            }
+
+            // OpenAI Settings
+            ImGui::Separator();
+            ImGui::Text("OpenAI Settings");
+
+            char baseUrl[1024] = "";
+            char apiKey[1024] = "";
+            
+            strcpy_s(baseUrl, sizeof(baseUrl), Config::OpenAI::baseUrl.c_str());
+            strcpy_s(apiKey, sizeof(apiKey), Config::OpenAI::apiKey.c_str());
+
+            bool urlChanged = ImGui::InputText("Base URL", baseUrl, sizeof(baseUrl));
+            bool keyChanged = ImGui::InputText("API Key", apiKey, sizeof(apiKey), 
+                                             ImGuiInputTextFlags_Password);
+
+            if (urlChanged) Config::OpenAI::baseUrl = baseUrl;
+            if (keyChanged) Config::OpenAI::apiKey = apiKey;
+
+            if (ImGui::Button(Config::OpenAI::initialized.load() ? 
                             "Reconnect to OpenAI" : "Connect to OpenAI")) {
-                ChatWindow::StartOpenAI(ChatWindow::openaiURL, ChatWindow::openaiAPIKey);
-            }
-
-            // Status display
-            // if (ChatWindow::openaiInitialized) {
-            if (ChatWindow::openaiInitialized.load()) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-                ImGui::Text("✓ Connected to OpenAI");
-                ImGui::PopStyleColor();
-            }
-            else if (!ChatWindow::Config::lastError.empty()) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::Text("✗ Error: %s", ChatWindow::Config::lastError.c_str());
-                ImGui::PopStyleColor();
-            }
-
-            // Save button (optional, since we auto-save on successful connection)
-            if (urlChanged || keyChanged) {
-                if (ImGui::Button("Save Settings")) {
-                    ChatWindow::Config::SaveConfig();
-                }
+                Config::OpenAI::StartConnection();
+                Config::SaveConfig();
             }
 
             FontAwesome::Pop();
         }
     }
 }
+
