@@ -65,8 +65,9 @@ namespace TESSERACT::AgentFunctions {
         logger::info("ExecuteSpellAcquire: Starting acquisition for {}", itemName.c_str());
         
         // Scan for objects in radius
-        std::vector<RE::TESObjectREFR*> scannedObjects = Utils::ScanningFunction(actor, radius);
-        
+        // std::vector<RE::TESObjectREFR*> scannedObjects = Utils::ScanningFunction(actor, radius);
+        std::vector<RE::TESObjectREFR*> scannedObjects = Utils::FastScanningFunction(actor, radius);
+
         // Find matching objects
         std::vector<RE::TESObjectREFR*> matchingObjects;
         for (auto* object : scannedObjects) {

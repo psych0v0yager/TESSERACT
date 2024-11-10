@@ -6,6 +6,7 @@ namespace TESSERACT::Utils {
     // Core game cell and reference scanning
     std::vector<RE::TESObjectCELL*> GetNeighboringCells(RE::TESObjectCELL* currentCell, int depth = 2);
     std::vector<RE::TESObjectREFR*> ScanningFunction(RE::TESObjectREFR* center, float radius, int depth = 2);
+    std::vector<RE::TESObjectREFR*> FastScanningFunction(RE::TESObjectREFR* center, float radius); //Thank you po3
 
     // Quest and reference management
     bool ForceRefToAlias(RE::TESQuest* script, unsigned int aliasID, RE::TESObjectREFR* ref);

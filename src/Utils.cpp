@@ -83,6 +83,27 @@ namespace TESSERACT::Utils {
         return result;
     }
 
+    std::vector<RE::TESObjectREFR*> FastScanningFunction(RE::TESObjectREFR* center, float radius) {
+        std::vector<RE::TESObjectREFR*> result;
+
+        if (!center) {
+            logger::error("FastScanningFunction: Reference object is null.");
+            return result;
+        }
+
+        if (const auto TES = RE::TES::GetSingleton(); TES) {
+            TES->ForEachReferenceInRange(center, radius, [&](RE::TESObjectREFR* ref) {
+                if (ref && ref->Is3DLoaded()) {
+                    result.push_back(ref);
+                }
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+        }
+
+        return result;
+    }
+
+
     bool ForceRefToAlias(RE::TESQuest* script, unsigned int aliasID, RE::TESObjectREFR* ref) {
         static REL::Relocation<decltype(ForceRefToAlias)> fn{ RELOCATION_ID(24523, 25052) };
         return fn(script, aliasID, ref);
