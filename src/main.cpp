@@ -1,10 +1,10 @@
 // main.cpp
 #include "pch.h"
-#include "UI.h"  // Make sure we include our UI header
+#include "UI.h"
+#include "PapyrusRegistration.h"
 
 void OnMessage(SKSE::MessagingInterface::Message* message) {
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
-        // Use single registration point
         UI::Register();
         logger::info("TESSERACT UI components registered");
     }
@@ -36,6 +36,12 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     // Register for SKSE messages
     auto messaging = SKSE::GetMessagingInterface();
     if (!messaging->RegisterListener(OnMessage)) {
+        return false;
+    }
+
+    // Register Papyrus functions
+    auto papyrus = SKSE::GetPapyrusInterface();
+    if (!papyrus->Register(TESSERACT::RegisterPapyrusFunctions)) {
         return false;
     }
 
