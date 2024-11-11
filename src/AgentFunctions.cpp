@@ -1,22 +1,7 @@
 #include "AgentFunctions.h"
 
 namespace TESSERACT::AgentFunctions {
-    /**
-     * @brief Executes a spell from an actor to a target
-     * 
-     * Uses Skyrim's magic casting system to execute a spell immediately.
-     * The spell will be cast regardless of actor's magicka or spell knowledge.
-     * 
-     * @param actor The actor who will cast the spell
-     * @param spellItem The spell to be cast
-     * @param target The target of the spell (can be nullptr for self-cast)
-     * 
-     * Example:
-     * ```cpp
-     * auto healingSpell = RE::TESForm::LookupByEditorID<RE::SpellItem>("HealOther");
-     * ExecuteSpell(someActor, healingSpell, woundedNPC);
-     * ```
-     */
+    // Force the NPC to cast a spell
     void ExecuteSpell(RE::Actor* actor, RE::SpellItem* spellItem, RE::TESObjectREFR* target) {
         if (!actor || !spellItem) {
             logger::error("ExecuteSpell: Invalid actor or spell");
@@ -35,26 +20,7 @@ namespace TESSERACT::AgentFunctions {
         }
     }
 
-    /**
-     * @brief Makes an actor acquire a specific item within a radius
-     * 
-     * This function:
-     * 1. Scans the area around the actor for items matching the name
-     * 2. Selects the closest matching item
-     * 3. Assigns it to a quest alias
-     * 4. Triggers the acquisition spell effect
-     * 
-     * @param actor The actor performing the acquisition
-     * @param questDestination The quest containing the alias
-     * @param aliasID The ID of the alias to store the item
-     * @param radius Search radius in game units
-     * @param itemName The exact name of the item to find
-     * 
-     * Example:
-     * ```cpp
-     * ExecuteSpellAcquire(guard, holdingQuest, 1, 1000.0f, "Iron Sword");
-     * ```
-     */
+    // Force the Acquire Package on to the NPC
     void ExecuteSpellAcquire(RE::Actor* actor, RE::TESQuest* questDestination, 
                             uint32_t aliasID, float radius, const RE::BSFixedString& itemName) {
         if (!actor || !questDestination) {
@@ -103,24 +69,7 @@ namespace TESSERACT::AgentFunctions {
         }
     }
 
-    /**
-     * @brief Makes an actor travel to a target location
-     * 
-     * Initiates travel behavior by:
-     * 1. Assigning the destination to a quest alias
-     * 2. Casting the travel spell effect
-     * 
-     * @param actor The actor who will travel
-     * @param questDestination The quest containing the alias
-     * @param target The destination reference
-     * @param aliasID The ID of the alias to store the destination
-     * 
-     * Example:
-     * ```cpp
-     * auto inn = RE::TESForm::LookupByEditorID<RE::TESObjectREFR>("WhiterunBanneredMare");
-     * ExecuteSpellTravel(npc, holdingQuest, inn, 2);
-     * ```
-     */
+    // Force the Travel Package on to the NPC
     void ExecuteSpellTravel(RE::Actor* actor, RE::TESQuest* questDestination, 
                            RE::TESObjectREFR* target, unsigned int aliasID) {
         if (!actor || !questDestination || !target) {
@@ -134,6 +83,36 @@ namespace TESSERACT::AgentFunctions {
                 ExecuteSpell(actor, spellItem, target);
             }
         }
+    }
+
+    // Initialize the package arrays
+    void InitializePackages() {
+        for (size_t i = 0; i < 128; i++) {
+            // Lookup packages by FormID or EditorID - adjust base IDs as needed
+            travelPackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_TravelPackage_NPC" + i);
+            acquirePackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_AcquirePackage_NPC" + i);
+        }
+    }
+
+    // Get package for an actor by searching quest aliases
+    RE::TESPackage* GetPackageForActor(RE::Actor* actor, RE::TESQuest* quest, 
+                                      const std::array<RE::TESPackage*, 128>& packages) {
+        if (!actor || !quest) return nullptr;
+
+        // Extract refs from aliases
+        std::vector<RE::TESObjectREFR*> refs;
+        for (auto& [aliasID, handle] : quest->refAliasMap) {
+            refs.push_back(handle.get().get());
+        }
+
+        // Find actor and use index as alias ID
+        for (size_t i = 0; i < refs.size(); i++) {
+            if (refs[i] == actor) {
+                return packages[i];
+            }
+        }
+        
+        return nullptr;
     }
 
     // Papyrus-exposed versions
@@ -153,4 +132,14 @@ namespace TESSERACT::AgentFunctions {
                                             unsigned int aliasID) {
         ExecuteSpellTravel(actor, questDestination, target, aliasID);
     }
+
+    RE::TESPackage* __stdcall GetTravelPackage(RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
+        GetPackageForActor(caster, quest, travelPackages);
+    }
+
+    RE::TESPackage* __stdcall GetAcquirePackage(RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
+        GetPackageForActor(caster, quest, acquirePackages);
+    }
+
+
 }

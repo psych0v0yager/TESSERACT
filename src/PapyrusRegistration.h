@@ -12,7 +12,9 @@ namespace TESSERACT {
         vm->RegisterFunction("ExecuteSpell", "TESSERACT", AgentFunctions::ExecuteSpellPapyrus);
         vm->RegisterFunction("ExecuteSpellAcquire", "TESSERACT", AgentFunctions::ExecuteSpellAcquirePapyrus);
         vm->RegisterFunction("ExecuteSpellTravel", "TESSERACT", AgentFunctions::ExecuteSpellTravelPapyrus);
-        
+        vm->RegisterFunction("GetAcquirePackage", "TESSERACT", AgentFunctions::GetAcquirePackagePapyrus);
+        vm->RegisterFunction("GetTravelPackage", "TESSERACT", AgentFunctions::GetTravelPackagePapyrus);
+
         // HoldingQuest Functions
         vm->RegisterFunction("ExtractRefs", "TESSERACT", HoldingQuest::AliasExtractorPapyrus);
         vm->RegisterFunction("ExtractRefsPlaceholder", "TESSERACT", HoldingQuest::AliasExtractorPlaceholderPapyrus);

@@ -30,6 +30,47 @@ namespace TESSERACT::HoldingQuest {
         return extractedRefs;
     }
 
+    // void FastQuestFill(RE::TESQuest* quest, std::vector<RE::TESObjectREFR*> newActors, RE::TESQuest* placeholderQuest) {
+    //     auto startTime = std::chrono::high_resolution_clock::now();
+        
+    //     if (!placeholderQuest || newActors.empty() || !quest || 
+    //         quest->refAliasMap.size() < (placeholderQuest->refAliasMap.size() - 1)) {
+    //         logger::error("FastQuestFill: Invalid input parameters");
+    //         return;
+    //     }
+        
+    //     // Extract placeholders
+    //     std::vector<RE::TESObjectREFR*> placeholders;
+    //     for (const auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+    //         placeholders.push_back(handle.get().get());
+    //     }
+
+    //     // Remove the first placeholder
+    //     if (!placeholders.empty()) {
+    //         placeholders.erase(placeholders.begin());
+    //     }
+
+    //     // Remove player reference
+    //     auto* playerRef = RE::PlayerCharacter::GetSingleton();
+    //     newActors.erase(std::remove(newActors.begin(), newActors.end(), playerRef), newActors.end());
+
+    //     // Replace placeholders with new actors
+    //     size_t placeholderIndex = 0;
+    //     for (auto* newActor : newActors) {
+    //         if (placeholderIndex >= placeholders.size()) break;
+
+    //         if (std::find(placeholders.begin(), placeholders.end(), newActor) == placeholders.end()) {
+    //             Utils::ForceRefToAlias(quest, placeholderIndex, newActor);
+    //             placeholders[placeholderIndex] = newActor;
+    //             placeholderIndex++;
+    //         }
+    //     }
+
+    //     auto endTime = std::chrono::high_resolution_clock::now();
+    //     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    //     logger::info("FastQuestFillFunction execution time: {} microseconds", duration.count());
+    // }
+
     void FastQuestFill(RE::TESQuest* quest, std::vector<RE::TESObjectREFR*> newActors, RE::TESQuest* placeholderQuest) {
         auto startTime = std::chrono::high_resolution_clock::now();
         
@@ -38,38 +79,77 @@ namespace TESSERACT::HoldingQuest {
             logger::error("FastQuestFill: Invalid input parameters");
             return;
         }
+
+        // Extract current holding quest contents (mix of NPCs and placeholders)
+        std::vector<RE::TESObjectREFR*> holdingContents;
+        for (auto& [aliasID, handle] : quest->refAliasMap) {
+            holdingContents.push_back(handle.get().get());
+        }
+
+        // Extract placeholders and create lookup set
+        std::vector<RE::TESObjectREFR*> placeholderContents;
+        std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+        for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+            auto ref = handle.get().get();
+            placeholderContents.push_back(ref);
+            placeholderSet.insert(ref);
+        }
         
-        // Extract placeholders
-        std::vector<RE::TESObjectREFR*> placeholders;
-        for (const auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
-            placeholders.push_back(handle.get().get());
+        // Remove container
+        if (!placeholderContents.empty()) {
+            placeholderContents.erase(placeholderContents.begin());
+            placeholderSet.erase(placeholderSet.begin());
         }
 
-        // Remove the first placeholder
-        if (!placeholders.empty()) {
-            placeholders.erase(placeholders.begin());
-        }
-
-        // Remove player reference
+        // Create fast lookup for new actors
+        std::unordered_set<RE::TESObjectREFR*> newActorsSet(newActors.begin(), newActors.end());
+        
+        // Remove player
         auto* playerRef = RE::PlayerCharacter::GetSingleton();
+        newActorsSet.erase(playerRef);
         newActors.erase(std::remove(newActors.begin(), newActors.end(), playerRef), newActors.end());
 
-        // Replace placeholders with new actors
-        size_t placeholderIndex = 0;
-        for (auto* newActor : newActors) {
-            if (placeholderIndex >= placeholders.size()) break;
+        // First Loop: Replace missing actors with placeholders
+        // Now O(n) with O(1) lookups
+        for (size_t i = 0; i < holdingContents.size(); i++) {
+            auto currentRef = holdingContents[i];
+            // If it's an actor (not a placeholder) and no longer in scan range
+            if (placeholderSet.find(currentRef) == placeholderSet.end() && 
+                newActorsSet.find(currentRef) == newActorsSet.end()) {
+                // Replace with corresponding placeholder
+                Utils::ForceRefToAlias(quest, i, placeholderContents[i]);
+                holdingContents[i] = placeholderContents[i];
+            }
+        }
 
-            if (std::find(placeholders.begin(), placeholders.end(), newActor) == placeholders.end()) {
-                Utils::ForceRefToAlias(quest, placeholderIndex, newActor);
-                placeholders[placeholderIndex] = newActor;
-                placeholderIndex++;
+        // Create set of current actors for fast lookup
+        std::unordered_set<RE::TESObjectREFR*> holdingContentsSet(holdingContents.begin(), holdingContents.end());
+
+        // Second Loop: Add new actors
+        // Now O(n) with O(1) lookups
+        for (auto* newActor : newActors) {
+            // Skip if actor is already in holding quest
+            if (holdingContentsSet.find(newActor) != holdingContentsSet.end()) {
+                continue;
+            }
+
+            // Find first placeholder to replace
+            for (size_t i = 0; i < holdingContents.size(); i++) {
+                if (placeholderSet.find(holdingContents[i]) != placeholderSet.end()) {
+                    Utils::ForceRefToAlias(quest, i, newActor);
+                    holdingContents[i] = newActor;
+                    holdingContentsSet.erase(holdingContents[i]);
+                    holdingContentsSet.insert(newActor);
+                    break;
+                }
             }
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-        logger::info("FastQuestFillFunction execution time: {} microseconds", duration.count());
+        logger::info("FastQuestFill execution time: {} microseconds", duration.count());
     }
+
 
     void NaiveQuestFill(RE::TESQuest* quest, std::vector<RE::TESObjectREFR*> objectList) {
         auto startTime = std::chrono::high_resolution_clock::now();

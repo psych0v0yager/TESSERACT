@@ -2,7 +2,7 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 #include <vector>
-
+#include <unordered_set>
 
 /**
  * Quest Alias System Overview
