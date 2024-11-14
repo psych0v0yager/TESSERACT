@@ -1,4 +1,6 @@
 #include "UI.h"
+#include "Utils.h"
+#include "HoldingQuestFunctions.h"
 
 namespace UI {
     //**** New menu render functions - these get called to draw items in the dropdown
@@ -153,7 +155,8 @@ namespace UI {
         namespace Dashboard {
             void SaveToConfig(nlohmann::json& config) {
                 config["dashboard"] = {
-                    {"npcCount", npcCount}
+                    {"npcCount", npcCount},
+                    {"debugQuestEnabled", debugQuestEnabled}  // Added debug quest
                 };
             }
 
@@ -162,6 +165,9 @@ namespace UI {
                     const auto& dashboard = config["dashboard"];
                     if (dashboard.contains("npcCount")) {
                         npcCount = dashboard["npcCount"].get<int>();
+                    }
+                    if (dashboard.contains("debugQuestEnabled")) {
+                        debugQuestEnabled = dashboard["debugQuestEnabled"].get<bool>();
                     }
                 }
             }
@@ -362,6 +368,55 @@ namespace UI {
             dashboardWindow = SKSEMenuFramework::AddWindow(RenderWindow);
         }
 
+        void RefreshNPCs() {
+            if (isRefreshing.exchange(true)) {
+                logger::warn("Refresh already in progress");
+                return;
+            }
+
+            try {
+                logger::info("Starting manual NPC refresh");
+
+                // Get player as scan center
+                auto* player = RE::PlayerCharacter::GetSingleton();
+                if (!player) {
+                    logger::error("Cannot get player singleton");
+                    return;
+                }
+
+                // Get holding quest
+                auto* holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest");
+                auto* placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_PlaceholderQuest");
+                
+                if (!holdingQuest || !placeholderQuest) {
+                    logger::error("Required quests not found");
+                    return;
+                }
+
+                // Use fast scanning function
+                float scanRadius = 4000.0f;  // Adjust radius as needed
+                auto scannedRefs = TESSERACT::Utils::FastScanningFunction(player, scanRadius);
+                
+                // Get unique NPCs
+                auto uniqueNPCs = TESSERACT::HoldingQuest::GetUniqueNPCs(scannedRefs);
+                
+                // Update holding quest
+                TESSERACT::HoldingQuest::FastQuestFill(holdingQuest, uniqueNPCs, placeholderQuest);
+
+                // Update state
+                State::activeNPCCount = std::count_if(uniqueNPCs.begin(), uniqueNPCs.end(),
+                    [](RE::TESObjectREFR* ref) { return ref && ref->GetFormType() == RE::FormType::ActorCharacter; });
+
+                logger::info("Manual refresh complete. Found {} active NPCs", State::activeNPCCount);
+
+            } catch (const std::exception& e) {
+                logger::error("Error during manual refresh: {}", e.what());
+            }
+
+            isRefreshing.store(false);
+        }
+
+
         void __stdcall RenderWindow() {
             auto viewport = ImGui::GetMainViewport();
 
@@ -381,32 +436,47 @@ namespace UI {
             int halfCount = (Config::Dashboard::npcCount + 1) / 2;  // Rounds up for odd numbers
 
 
-
             // This is the Top Row (The title bar)
             if (ImGui::Begin("NPC Dashboard", &isOpen, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoCollapse)) {
 
                 FontAwesome::Pop();
 
-                // This is the row under the title bar, the menu bar
+                //|||| Reorganized menu bar with View on left, NPC count center, Status right
+                    // Left - View Menu
                 if (ImGui::BeginMenuBar()) {
-
-                    //|||| Reorganized menu bar with View on left, NPC count center, Status right
                     // Left - View Menu
                     FontAwesome::PushSolid();
                     if (ImGui::BeginMenu("View")) {
+                        // Single Refresh menu item with proper implementation
                         if (ImGui::MenuItem((Glyphs::RefreshIcon + " Refresh").c_str())) {
-                            // Refresh dashboard data
+                            // Start refresh in a separate thread to avoid blocking UI
+                            try {
+                                std::thread([]{
+                                    RefreshNPCs();
+                                }).detach();
+                                logger::info("Started NPC refresh thread");
+                            } catch (const std::exception& e) {
+                                logger::error("Failed to start refresh thread: {}", e.what());
+                            }
                         }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Manually scan for and update NPCs");
+                        }
+                        
+                        // Show refresh status if active
+                        if (isRefreshing.load()) {
+                            ImGui::SameLine();
+                            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Refreshing...");
+                        }
+
                         if (ImGui::MenuItem((Glyphs::CloseIcon + " Close").c_str())) {
-                            // Window->IsOpen = false;
                             isOpen = false;
                         }
                         ImGui::EndMenu();
                     }
                     FontAwesome::Pop();
-                                        
+                    
                     ImGui::EndMenuBar();
-
                 }
 
 
@@ -494,6 +564,9 @@ namespace UI {
             }
         }
     }
+
+
+
 
     namespace ChatWindow {
 
@@ -793,7 +866,7 @@ namespace UI {
         }
     }
 
-    // Example of updated Settings menu with new config system
+    // In UI.cpp, update the Settings::RenderMenu function
     namespace Settings {
         void __stdcall RenderMenu() {
             FontAwesome::PushSolid();
@@ -805,15 +878,60 @@ namespace UI {
             
             int npcCount = Config::Dashboard::npcCount;
             if (ImGui::InputInt("Number of NPCs", &npcCount)) {
-                // Clamp to reasonable values
-                npcCount = std::clamp(npcCount, 2, 200);
+                npcCount = std::clamp(npcCount, 2, 128);
                 Config::Dashboard::npcCount = npcCount;
                 Config::SaveConfig();
             }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Maximum number of NPCs to manage (2-128).\n"
+                                "Changes take effect on next scan.");
+            }
+
+            // Debug Settings
+            ImGui::Separator();
+            ImGui::Text("Debug Settings");
+
+            bool debugEnabled = Config::Dashboard::debugQuestEnabled;
+            if (ImGui::Checkbox("Enable Debug Quest", &debugEnabled)) {
+                Config::Dashboard::debugQuestEnabled = debugEnabled;
+                Config::SaveConfig();
+                
+                // Toggle debug quest
+                if (auto debugQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_DebugQuest")) {
+                    if (debugEnabled) {
+                        debugQuest->Start();
+                        logger::info("Debug quest started");
+                    } else {
+                        debugQuest->Stop();
+                        logger::info("Debug quest stopped");
+                    }
+                } else {
+                    logger::error("Could not find TESSERACT_DebugQuest");
+                    ImGui::OpenPopup("Debug Quest Error");
+                }
+            }
+
+            // Debug status indicator
+            ImGui::SameLine();
+            ImGui::TextColored(
+                Config::Dashboard::debugQuestEnabled ? 
+                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                Config::Dashboard::debugQuestEnabled ? "Active" : "Inactive"
+            );
 
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Set the number of NPCs to display (2-200).\n"
-                                "NPCs will be split evenly between two columns.");
+                ImGui::SetTooltip("Enables debug spells and functionality.\n"
+                                "WARNING: For testing purposes only!");
+            }
+
+            // Error popup
+            if (ImGui::BeginPopupModal("Debug Quest Error", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("Could not find TESSERACT_DebugQuest!\n"
+                        "Make sure the mod is properly installed.");
+                if (ImGui::Button("OK")) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
 
             // OpenAI Settings
@@ -827,8 +945,17 @@ namespace UI {
             strcpy_s(apiKey, sizeof(apiKey), Config::OpenAI::apiKey.c_str());
 
             bool urlChanged = ImGui::InputText("Base URL", baseUrl, sizeof(baseUrl));
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("OpenAI API endpoint URL.\n"
+                                "Leave empty for default OpenAI endpoint.");
+            }
+
             bool keyChanged = ImGui::InputText("API Key", apiKey, sizeof(apiKey), 
-                                             ImGuiInputTextFlags_Password);
+                                            ImGuiInputTextFlags_Password);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Your OpenAI API key.\n"
+                                "Required for AI functionality.");
+            }
 
             if (urlChanged) Config::OpenAI::baseUrl = baseUrl;
             if (keyChanged) Config::OpenAI::apiKey = apiKey;
@@ -838,9 +965,17 @@ namespace UI {
                 Config::OpenAI::StartConnection();
                 Config::SaveConfig();
             }
+            
+            // OpenAI connection status
+            ImGui::SameLine();
+            ImGui::TextColored(
+                Config::OpenAI::initialized.load() ? 
+                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                Config::OpenAI::initialized.load() ? "Connected" : "Not Connected"
+            );
 
             FontAwesome::Pop();
         }
     }
-}
 
+}
