@@ -1,4 +1,5 @@
 #include "HoldingQuestFunctions.h"
+#include "UI.h"
 #include "Utils.h"
 
 namespace TESSERACT::HoldingQuest {
@@ -80,26 +81,72 @@ namespace TESSERACT::HoldingQuest {
             return;
         }
 
-        // Extract current holding quest contents (mix of NPCs and placeholders)
+        // // Extract current holding quest contents (mix of NPCs and placeholders)
+        // std::vector<RE::TESObjectREFR*> holdingContents;
+        // for (auto& [aliasID, handle] : quest->refAliasMap) {
+        //     holdingContents.push_back(handle.get().get());
+        // }
+
+        // // Extract placeholders and create lookup set
+        // std::vector<RE::TESObjectREFR*> placeholderContents;
+        // std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+        // for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+        //     auto ref = handle.get().get();
+        //     placeholderContents.push_back(ref);
+        //     placeholderSet.insert(ref);
+        // }
+        
+        // // Remove container
+        // if (!placeholderContents.empty()) {
+        //     placeholderContents.erase(placeholderContents.begin());
+        //     placeholderSet.erase(placeholderSet.begin());
+        // }
+
+
+        // Get current npcCount from config
+        const size_t maxNPCs = UI::Config::Dashboard::npcCount;
+
+        // Extract contents only up to maxNPCs
         std::vector<RE::TESObjectREFR*> holdingContents;
         for (auto& [aliasID, handle] : quest->refAliasMap) {
+            if (aliasID >= maxNPCs) break;
             holdingContents.push_back(handle.get().get());
         }
 
-        // Extract placeholders and create lookup set
+        // Extract placeholders (still need all for initialization)
+        // std::vector<RE::TESObjectREFR*> placeholderContents;
+        // std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+        // for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+        //     auto ref = handle.get().get();
+        //     placeholderContents.push_back(ref);
+        //     placeholderSet.insert(ref);
+        // }
+        
+        // // Remove container
+        // if (!placeholderContents.empty()) {
+        //     placeholderContents.erase(placeholderContents.begin());
+        //     placeholderSet.erase(placeholderSet.begin());
+        // }
+        // Extract placeholders (container is last, so we can use direct indexing)
         std::vector<RE::TESObjectREFR*> placeholderContents;
         std::unordered_set<RE::TESObjectREFR*> placeholderSet;
         for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+            if (aliasID == 128) break;  // Skip container at end
             auto ref = handle.get().get();
             placeholderContents.push_back(ref);
             placeholderSet.insert(ref);
         }
-        
-        // Remove container
-        if (!placeholderContents.empty()) {
-            placeholderContents.erase(placeholderContents.begin());
-            placeholderSet.erase(placeholderSet.begin());
+
+        // Handle case where npcCount was increased:
+        // Fill any uninitialized slots with placeholders
+        while (holdingContents.size() < maxNPCs) {
+            size_t currentIndex = holdingContents.size();
+            if (currentIndex < placeholderContents.size()) {
+                Utils::ForceRefToAlias(quest, currentIndex, placeholderContents[currentIndex]);
+                holdingContents.push_back(placeholderContents[currentIndex]);
+            }
         }
+
 
         // Create fast lookup for new actors
         std::unordered_set<RE::TESObjectREFR*> newActorsSet(newActors.begin(), newActors.end());

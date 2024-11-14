@@ -11,13 +11,14 @@ namespace TESSERACT::AgentFunctions {
     void ExecuteSpellTravel(RE::Actor* actor, RE::TESQuest* questDestination, RE::TESObjectREFR* target, unsigned int aliasID);
 
     // Package Storage Dictionary
-    inline std::array<RE::TESPackage*, 128> travelPackages;
-    inline std::array<RE::TESPackage*, 128> acquirePackages;
+    // TODO Change all 128s to 127s since Placeholder0 is a container
+    inline std::array<RE::TESPackage*, 127> travelPackages;
+    inline std::array<RE::TESPackage*, 127> acquirePackages;
     void InitializePackages();
 
     // Package Getter
     RE::TESPackage* GetPackageForActor(RE::Actor* actor, RE::TESQuest* quest, 
-                                    const std::array<RE::TESPackage*, 128>& packages);
+                                    const std::array<RE::TESPackage*, 127>& packages);
 
 
     // Papyrus-exposed versions

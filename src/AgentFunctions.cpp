@@ -87,7 +87,7 @@ namespace TESSERACT::AgentFunctions {
 
     // Initialize the package arrays
     void InitializePackages() {
-        for (size_t i = 0; i < 128; i++) {
+        for (size_t i = 0; i < 127; i++) {
             // Lookup packages by FormID or EditorID - adjust base IDs as needed
             travelPackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_TravelPackage_NPC" + i);
             acquirePackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_AcquirePackage_NPC" + i);
@@ -96,7 +96,7 @@ namespace TESSERACT::AgentFunctions {
 
     // Get package for an actor by searching quest aliases
     RE::TESPackage* GetPackageForActor(RE::Actor* actor, RE::TESQuest* quest, 
-                                      const std::array<RE::TESPackage*, 128>& packages) {
+                                      const std::array<RE::TESPackage*, 127>& packages) {
         if (!actor || !quest) return nullptr;
 
         // Extract refs from aliases
@@ -133,13 +133,14 @@ namespace TESSERACT::AgentFunctions {
         ExecuteSpellTravel(actor, questDestination, target, aliasID);
     }
 
-    RE::TESPackage* __stdcall GetTravelPackage(RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
-        GetPackageForActor(caster, quest, travelPackages);
+    RE::TESPackage* __stdcall TESSERACT::AgentFunctions::GetTravelPackagePapyrus(
+        RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
+        return GetPackageForActor(caster, quest, travelPackages);
     }
 
-    RE::TESPackage* __stdcall GetAcquirePackage(RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
-        GetPackageForActor(caster, quest, acquirePackages);
+    RE::TESPackage* __stdcall TESSERACT::AgentFunctions::GetAcquirePackagePapyrus(
+        RE::StaticFunctionTag*, RE::Actor* caster, RE::TESQuest* quest) {
+        return GetPackageForActor(caster, quest, acquirePackages);
     }
-
 
 }
