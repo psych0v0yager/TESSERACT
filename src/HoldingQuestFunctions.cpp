@@ -75,11 +75,18 @@ namespace TESSERACT::HoldingQuest {
     void FastQuestFill(RE::TESQuest* quest, std::vector<RE::TESObjectREFR*> newActors, RE::TESQuest* placeholderQuest) {
         auto startTime = std::chrono::high_resolution_clock::now();
         
-        if (!placeholderQuest || newActors.empty() || !quest || 
-            quest->refAliasMap.size() < (placeholderQuest->refAliasMap.size() - 1)) {
-            logger::error("FastQuestFill: Invalid input parameters");
+        if (!placeholderQuest || newActors.empty() || !quest) {
+            logger::error("FastQuestFill validation failed:");
+            logger::error("- PlaceholderQuest: {}", placeholderQuest ? "Valid" : "NULL");
+            logger::error("- NewActors: {} actors", newActors.size());
+            logger::error("- Quest: {}", quest ? "Valid" : "NULL");
             return;
         }
+
+        // Add informational logging
+        logger::info("FastQuestFill starting:");
+        logger::info("- Active Aliases in HoldingQuest: {}", quest->refAliasMap.size());
+        logger::info("- New Actors to process: {}", newActors.size());
 
         // // Extract current holding quest contents (mix of NPCs and placeholders)
         // std::vector<RE::TESObjectREFR*> holdingContents;
@@ -87,20 +94,20 @@ namespace TESSERACT::HoldingQuest {
         //     holdingContents.push_back(handle.get().get());
         // }
 
-        // // Extract placeholders and create lookup set
-        // std::vector<RE::TESObjectREFR*> placeholderContents;
-        // std::unordered_set<RE::TESObjectREFR*> placeholderSet;
-        // for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
-        //     auto ref = handle.get().get();
-        //     placeholderContents.push_back(ref);
-        //     placeholderSet.insert(ref);
-        // }
+        // Extract placeholders and create lookup set
+        std::vector<RE::TESObjectREFR*> placeholderContents;
+        std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+        for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+            auto ref = handle.get().get();
+            placeholderContents.push_back(ref);
+            placeholderSet.insert(ref);
+        }
         
-        // // Remove container
-        // if (!placeholderContents.empty()) {
-        //     placeholderContents.erase(placeholderContents.begin());
-        //     placeholderSet.erase(placeholderSet.begin());
-        // }
+        // Remove container
+        if (!placeholderContents.empty()) {
+            placeholderContents.erase(placeholderContents.begin());
+            placeholderSet.erase(placeholderSet.begin());
+        }
 
 
         // Get current npcCount from config
@@ -128,14 +135,14 @@ namespace TESSERACT::HoldingQuest {
         //     placeholderSet.erase(placeholderSet.begin());
         // }
         // Extract placeholders (container is last, so we can use direct indexing)
-        std::vector<RE::TESObjectREFR*> placeholderContents;
-        std::unordered_set<RE::TESObjectREFR*> placeholderSet;
-        for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
-            if (aliasID == 128) break;  // Skip container at end
-            auto ref = handle.get().get();
-            placeholderContents.push_back(ref);
-            placeholderSet.insert(ref);
-        }
+        // std::vector<RE::TESObjectREFR*> placeholderContents;
+        // std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+        // for (auto& [aliasID, handle] : placeholderQuest->refAliasMap) {
+        //     if (aliasID == 128) break;  // Skip container at end
+        //     auto ref = handle.get().get();
+        //     placeholderContents.push_back(ref);
+        //     placeholderSet.insert(ref);
+        // }
 
         // Handle case where npcCount was increased:
         // Fill any uninitialized slots with placeholders

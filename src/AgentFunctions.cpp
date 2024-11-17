@@ -89,8 +89,8 @@ namespace TESSERACT::AgentFunctions {
     void InitializePackages() {
         for (size_t i = 0; i < 127; i++) {
             // Lookup packages by FormID or EditorID - adjust base IDs as needed
-            travelPackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_TravelPackage_NPC" + i);
-            acquirePackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_AcquirePackage_NPC" + i);
+            travelPackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_Package_Travel_NPCDUPLICATE" + i);
+            acquirePackages[i] = RE::TESForm::LookupByEditorID<RE::TESPackage>("TESSERACT_Package_Acquire_NPCDUPLICATE" + i);
         }
     }
 

@@ -385,9 +385,11 @@ namespace UI {
                 }
 
                 // Get holding quest
-                auto* holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest");
-                auto* placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_PlaceholderQuest");
+                auto* holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest_ActiveActors");
+                auto* placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest_PlaceholderStorage");
                 
+
+                // if (!holdingQuest) {
                 if (!holdingQuest || !placeholderQuest) {
                     logger::error("Required quests not found");
                     return;
@@ -450,14 +452,7 @@ namespace UI {
                         // Single Refresh menu item with proper implementation
                         if (ImGui::MenuItem((Glyphs::RefreshIcon + " Refresh").c_str())) {
                             // Start refresh in a separate thread to avoid blocking UI
-                            try {
-                                std::thread([]{
-                                    RefreshNPCs();
-                                }).detach();
-                                logger::info("Started NPC refresh thread");
-                            } catch (const std::exception& e) {
-                                logger::error("Failed to start refresh thread: {}", e.what());
-                            }
+                            RefreshNPCs();
                         }
                         if (ImGui::IsItemHovered()) {
                             ImGui::SetTooltip("Manually scan for and update NPCs");
@@ -474,6 +469,7 @@ namespace UI {
                         }
                         ImGui::EndMenu();
                     }
+
                     FontAwesome::Pop();
                     
                     ImGui::EndMenuBar();
