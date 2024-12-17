@@ -11,6 +11,8 @@
 #include <filesystem>  // For filesystem operations
 #include <fstream>    // For file I/O
 #include <atomic>     // For std::atomic operations
+#include <unordered_set>
+#include "Agent.h"
 
 namespace UI {
     // Global registration for all UI components
@@ -98,6 +100,17 @@ namespace UI {
         // Window handle
         inline MENU_WINDOW dashboardWindow;
 
+        // Quest and placeholder tracking
+        // Quest Editor IDs
+        inline const std::string HOLDING_QUEST_EDITORID = "TESSERACT_HoldingQuest_ActiveActors";
+        inline const std::string PLACEHOLDER_QUEST_EDITORID = "TESSERACT_HoldingQuest_PlaceholderStorage";
+
+        // Quest handles
+        inline RE::TESQuest* holdingQuest = nullptr;
+        inline RE::TESQuest* placeholderQuest = nullptr;
+
+        inline std::unordered_set<RE::TESObjectREFR*> placeholderSet;
+
         // Refresh variable
         inline std::atomic<bool> isRefreshing{false};
 
@@ -148,15 +161,16 @@ namespace UI {
         inline std::future<std::string> aiResponseFuture;
         
         // NPC state
-        inline RE::Actor* currentNPC = nullptr;
+        // inline RE::Actor* currentNPC = nullptr;
+        inline std::unique_ptr<TESSERACT::Agent::SubAgent> currentNPC = nullptr;
 
         // Chat context/memory management
-        namespace Context {
-            inline std::vector<nlohmann::json> messages;
+        // namespace Context {
+        //     inline std::vector<nlohmann::json> messages;
             
-            void AddMessage(const std::string& role, const std::string& content);
-            nlohmann::json GetMessageHistory();
-        }
+        //     void AddMessage(const std::string& role, const std::string& content);
+        //     nlohmann::json GetMessageHistory();
+        // }
 
         // Core functions
         void __stdcall RenderWindow();
@@ -166,8 +180,8 @@ namespace UI {
         
         // OpenAI related functions
         std::string SendOpenAIRequest(const std::string& userInput);
-        std::string GenerateSystemPrompt();
-        std::string GetNPCContext();
+        // std::string GenerateSystemPrompt();
+        // std::string GetNPCContext();
         void ProcessResponse();
     }
 

@@ -1,6 +1,8 @@
 #include "UI.h"
 #include "Utils.h"
 #include "HoldingQuestFunctions.h"
+#include "Agent.h"
+
 
 namespace UI {
     //**** New menu render functions - these get called to draw items in the dropdown
@@ -30,6 +32,19 @@ namespace UI {
             return;
         }
         
+        // Initialize quests
+        Dashboard::holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>(Dashboard::HOLDING_QUEST_EDITORID);
+        Dashboard::placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>(Dashboard::PLACEHOLDER_QUEST_EDITORID);
+
+        if (!Dashboard::holdingQuest || !Dashboard::placeholderQuest) {
+            logger::error("Failed to initialize quests in Register!");
+            logger::error("HoldingQuest: {}", Dashboard::holdingQuest ? "Found" : "NULL");
+            logger::error("PlaceholderQuest: {}", Dashboard::placeholderQuest ? "Found" : "NULL");
+        } else {
+            logger::info("Successfully initialized quests");
+        }
+
+
         logger::info("Setting up TESSERACT menu section...");
 
         // Try to load config and connect to OpenAI on startup
@@ -384,15 +399,20 @@ namespace UI {
                     return;
                 }
 
-                // Get holding quest
-                auto* holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest_ActiveActors");
-                auto* placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest_PlaceholderStorage");
-                
+                // Dashboard::holdingQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_HoldingQuest_ActiveActors");
+                // auto* placeholderQuest = RE::TESForm::LookupByEditorID<RE::TESQuest>("TESSERACT_PlaceholderQuest_PlaceholderStorage");
 
-                // if (!holdingQuest) {
-                if (!holdingQuest || !placeholderQuest) {
+                if (!Dashboard::holdingQuest || !Dashboard::placeholderQuest) {
                     logger::error("Required quests not found");
                     return;
+                }
+
+                // Update placeholder set
+                Dashboard::placeholderSet.clear();
+                for (auto& [aliasID, handle] : Dashboard::placeholderQuest->refAliasMap) {
+                    if (auto ref = handle.get().get()) {
+                        Dashboard::placeholderSet.insert(ref);
+                    }
                 }
 
                 // Use fast scanning function
@@ -403,7 +423,7 @@ namespace UI {
                 auto uniqueNPCs = TESSERACT::HoldingQuest::GetUniqueNPCs(scannedRefs);
                 
                 // Update holding quest
-                TESSERACT::HoldingQuest::FastQuestFill(holdingQuest, uniqueNPCs, placeholderQuest);
+                TESSERACT::HoldingQuest::FastQuestFill(Dashboard::holdingQuest, uniqueNPCs, Dashboard::placeholderQuest);
 
                 // Update state
                 State::activeNPCCount = std::count_if(uniqueNPCs.begin(), uniqueNPCs.end(),
@@ -492,33 +512,105 @@ namespace UI {
                 ImGui::ImVec2Manager::Destroy(availableRegion);
 
 
+                // // First NPC List column
+                // ImGui::BeginChild("NPCList1", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
+                // FontAwesome::PushSolid();
+
+                // for (int i = 0; i < halfCount; i++) {
+                //     bool isSelected = NPCDetails::selectedNpcId == i + 1;
+                //     if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
+                //         logger::debug("Selected NPC {} from first column", i + 1);
+                //         NPCDetails::Open(i + 1);
+                //     }
+
+                // }
+
+
+                // FontAwesome::Pop();
+                // ImGui::EndChild();
+
+                // // Second NPC List column
+                // ImGui::NextColumn();
+                // ImGui::BeginChild("NPCList2", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
+                // FontAwesome::PushSolid();
+
+                // for (int i = halfCount; i < Config::Dashboard::npcCount; i++) {
+                //     bool isSelected = NPCDetails::selectedNpcId == i + 1;
+                //     if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
+                //         logger::debug("Selected NPC {} from first column", i + 1);
+                //         NPCDetails::Open(i + 1);
+                //     }
+                // }
+                // FontAwesome::Pop();
+                // ImGui::EndChild();
+                
                 // First NPC List column
+                // Calculate split point for the two columns - moved up for clarity
+                int totalNPCs = Config::Dashboard::npcCount;
+                int halfCount = (totalNPCs + 1) / 2;  // Rounds up for odd numbers
+
+                // First column (0 to halfCount-1)
                 ImGui::BeginChild("NPCList1", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
                 FontAwesome::PushSolid();
 
+                // First half
                 for (int i = 0; i < halfCount; i++) {
-                    bool isSelected = NPCDetails::selectedNpcId == i + 1;
-                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
-                        logger::debug("Selected NPC {} from first column", i + 1);
-                        NPCDetails::Open(i + 1);
+                    bool isSelected = NPCDetails::selectedNpcId == i;  // Changed from i+1
+                    
+                    std::string npcName = ": Empty";
+                    if (Dashboard::holdingQuest) {
+                        auto& aliasMap = Dashboard::holdingQuest->refAliasMap;
+                        for (auto& [aliasID, handle] : aliasMap) {
+                            if (aliasID == i) {  // Using i directly to match alias ID
+                                if (auto ref = handle.get().get()) {
+                                    if (Dashboard::placeholderSet.find(ref) == Dashboard::placeholderSet.end()) {
+                                        npcName = std::format(": {}", ref->GetName());
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
 
+                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + 
+                                    std::to_string(i) +  // Changed from i+1
+                                    npcName).c_str(), isSelected)) {
+                        logger::debug("Selected NPC {} from first column", i);
+                        NPCDetails::Open(i);  // Changed from i+1
+                    }
                 }
-
 
                 FontAwesome::Pop();
                 ImGui::EndChild();
 
-                // Second NPC List column
+                // Second column (halfCount to totalNPCs-1)
                 ImGui::NextColumn();
                 ImGui::BeginChild("NPCList2", ImVec2(0, listHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
                 FontAwesome::PushSolid();
 
-                for (int i = halfCount; i < Config::Dashboard::npcCount; i++) {
-                    bool isSelected = NPCDetails::selectedNpcId == i + 1;
-                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + std::to_string(i + 1)).c_str(), isSelected)) {
-                        logger::debug("Selected NPC {} from first column", i + 1);
-                        NPCDetails::Open(i + 1);
+                for (int i = halfCount; i < totalNPCs; i++) {  // Changed from Config::Dashboard::npcCount
+                    bool isSelected = NPCDetails::selectedNpcId == i;  // Changed from i+1
+                    
+                    std::string npcName = ": Empty";
+                    if (Dashboard::holdingQuest) {
+                        auto& aliasMap = Dashboard::holdingQuest->refAliasMap;
+                        for (auto& [aliasID, handle] : aliasMap) {
+                            if (aliasID == i) {  // Using i directly to match alias ID
+                                if (auto ref = handle.get().get()) {
+                                    if (Dashboard::placeholderSet.find(ref) == Dashboard::placeholderSet.end()) {
+                                        npcName = std::format(": {}", ref->GetName());
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    if (ImGui::Selectable((Glyphs::NPCIcon + " NPC " + 
+                                    std::to_string(i) +  // Changed from i+1
+                                    npcName).c_str(), isSelected)) {
+                        logger::debug("Selected NPC {} from second column", i);
+                        NPCDetails::Open(i);  // Changed from i+1
                     }
                 }
                 FontAwesome::Pop();
@@ -571,14 +663,20 @@ namespace UI {
         }
 
         void Open(RE::Actor* targetNpc) {
-            currentNPC = targetNpc;
+            // OLD CODE
+            // currentNPC = targetNpc;
+            // OLD CODE
+            // Now create an Agent object, and store the pointer
+            currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(targetNpc, "test");
             // chatWindow->IsOpen = true;
             chatHistory.clear();
             // isThinking = false;
             isThinking.store(false);
 
             if (currentNPC) {
-                Context::AddMessage("system", GenerateSystemPrompt());
+                // OLD CODE
+                // Context::AddMessage("system", GenerateSystemPrompt());
+                // OLD CODE
                 chatHistory.push_back({
                     ChatMessage::Sender::NPC,
                     "Hello, how can I help you today?"
@@ -588,51 +686,56 @@ namespace UI {
 
         void Close() {
             chatWindow->IsOpen = false;
-            currentNPC = nullptr;
+            // OLD CODE
+            // currentNPC = nullptr;
+            // OLD CODE
+            currentNPC.reset();  // Properly destroy the agent
             chatHistory.clear();
-            Context::messages.clear();
+            // OLD CODE
+            // Context::messages.clear();
+            // OLD CODE
         }
 
-        std::string GenerateSystemPrompt() {
-            if (!currentNPC) return "";
+        // std::string GenerateSystemPrompt() {
+        //     if (!currentNPC) return "";
 
-            auto name = currentNPC->GetName();
-            auto race = currentNPC->GetRace()->GetName();
-            auto loc = currentNPC->GetCurrentLocation() ? 
-                       currentNPC->GetCurrentLocation()->GetName() : "Unknown Location";
+        //     auto name = currentNPC->GetName();
+        //     auto race = currentNPC->GetRace()->GetName();
+        //     auto loc = currentNPC->GetCurrentLocation() ? 
+        //                currentNPC->GetCurrentLocation()->GetName() : "Unknown Location";
 
-            return std::format(
-                "You are {}, a {} in {}. Maintain character and speak naturally. "
-                "You have your own goals, personality, and daily routine. "
-                "Keep responses concise and relevant to your character. "
-                "Current time: {}, Weather: {}.",
-                name, race, loc,
-                "TODO: Add time", "TODO: Add weather"
-            );
-        }
+        //     return std::format(
+        //         "You are {}, a {} in {}. Maintain character and speak naturally. "
+        //         "You have your own goals, personality, and daily routine. "
+        //         "Keep responses concise and relevant to your character. "
+        //         "Current time: {}, Weather: {}.",
+        //         name, race, loc,
+        //         "TODO: Add time", "TODO: Add weather"
+        //     );
+        // }
 
-        std::string GetNPCContext() {
-            if (!currentNPC) return "";
+        // std::string GetNPCContext() {
+        //     if (!currentNPC) return "";
 
-            bool isSneaking = currentNPC->IsSneaking();
-            bool isInCombat = currentNPC->IsInCombat();
-            bool isAlarmed = currentNPC->IsAlarmed();
-            float health = currentNPC->As<RE::ActorValueOwner>()->GetActorValue(RE::ActorValue::kHealth);
+        //     bool isSneaking = currentNPC->IsSneaking();
+        //     bool isInCombat = currentNPC->IsInCombat();
+        //     bool isAlarmed = currentNPC->IsAlarmed();
+        //     float health = currentNPC->As<RE::ActorValueOwner>()->GetActorValue(RE::ActorValue::kHealth);
             
-            return std::format(
-                "Current state: {}"
-                "Health: {:.0f}%\n"
-                "Location: {}\n"
-                "Time: {}\n",
-                isInCombat ? "In Combat!" : 
-                isAlarmed ? "Alarmed" : 
-                isSneaking ? "Sneaking" : "Normal",
-                health,
-                currentNPC->GetCurrentLocation() ? 
-                    currentNPC->GetCurrentLocation()->GetName() : "Unknown",
-                "TODO: Add time"
-            );
-        }
+        //     return std::format(
+        //         "Current state: {}"
+        //         "Health: {:.0f}%\n"
+        //         "Location: {}\n"
+        //         "Time: {}\n",
+        //         isInCombat ? "In Combat!" : 
+        //         isAlarmed ? "Alarmed" : 
+        //         isSneaking ? "Sneaking" : "Normal",
+        //         health,
+        //         currentNPC->GetCurrentLocation() ? 
+        //             currentNPC->GetCurrentLocation()->GetName() : "Unknown",
+        //         "TODO: Add time"
+        //     );
+        // }
 
 
         void __stdcall ChatWindow::RenderWindow() {
@@ -651,19 +754,104 @@ namespace UI {
 
             // Load the atomic IsOpen value into a local bool
             bool isOpen = chatWindow->IsOpen.load();
+            inline char formIdBuffer[9] = {0};  // 8 chars for hex + null terminator
 
             if (ImGui::Begin("Dialogue##ChatWindow", &isOpen, ImGuiWindowFlags_MenuBar)) {
                 if (ImGui::BeginMenuBar()) {
+                    // if (ImGui::BeginMenu("Options")) {
+                    //     if (ImGui::MenuItem("Clear Chat")) {
+                    //         chatHistory.clear();
+                    //     }
+                    //     if (ImGui::MenuItem("Close")) {
+                    //         // Close();
+                    //         isOpen = false;
+                    //     }
+                    //     ImGui::EndMenu();
+                    // }
+
                     if (ImGui::BeginMenu("Options")) {
                         if (ImGui::MenuItem("Clear Chat")) {
                             chatHistory.clear();
                         }
+
+                        // Add a separator before debug options
+                        ImGui::Separator();
+                        ImGui::Text("Debug Options");
+
+                        // Form ID input field
+                        if (ImGui::InputText("Form ID", formIdBuffer, sizeof(formIdBuffer), 
+                                            ImGuiInputTextFlags_CharsHexadecimal)) {
+                            // Input is being modified
+                        }
+                        
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Enter NPC Form ID in hex (e.g., 00000007 for player)\n"
+                                            "You can find Form IDs using the console command 'help <name>'");
+                        }
+
+                        // Button to connect to NPC
+                        if (ImGui::Button("Connect to NPC")) {
+                            try {
+                                // Convert hex string to integer
+                                unsigned int formId;
+                                std::stringstream ss;
+                                ss << std::hex << formIdBuffer;
+                                ss >> formId;
+
+                                // Look up the NPC
+                                if (auto form = RE::TESForm::LookupByID(formId)) {
+                                    if (auto npc = form->As<RE::Actor>()) {
+                                        // We found the NPC! Create a new agent
+                                        logger::info("Found NPC: {}", npc->GetName());
+                                        
+                                        // Close existing agent if any
+                                        if (currentNPC) {
+                                            currentNPC.reset();
+                                        }
+
+                                        // Create new agent for this NPC
+                                        currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(npc, "test");
+                                        
+                                        // Clear existing chat and add greeting
+                                        chatHistory.clear();
+                                        chatHistory.push_back({
+                                            ChatMessage::Sender::NPC,
+                                            "Hello, I am " + std::string(npc->GetName())
+                                        });
+                                    } else {
+                                        logger::error("Form {} is not an Actor", formId);
+                                    }
+                                } else {
+                                    logger::error("Could not find Form with ID {}", formId);
+                                }
+                            }
+                            catch (const std::exception& e) {
+                                logger::error("Error connecting to NPC: {}", e.what());
+                            }
+                        }
+
+                        // Add status text showing current NPC
+                        if (currentNPC) {
+                            ImGui::TextColored(
+                                ImVec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green text
+                                "Connected to: %s", 
+                                currentNPC->GetNPC()->GetName()
+                            );
+                        } else {
+                            ImGui::TextColored(
+                                ImVec4(0.7f, 0.7f, 0.7f, 1.0f),  // Gray text
+                                "Not connected to any NPC"
+                            );
+                        }
+
                         if (ImGui::MenuItem("Close")) {
-                            // Close();
                             isOpen = false;
                         }
+                        
                         ImGui::EndMenu();
                     }
+
+
                     ImGui::EndMenuBar();
                 }
 
@@ -745,29 +933,89 @@ namespace UI {
 
 
                 ImGui::SameLine();
+                // if (ImGui::Button("Send") || sendMessage) {
+                //     if (strlen(inputBuffer) > 0) {
+                //         std::string userMessage = inputBuffer;  // Create copy of message
+                //         logger::info("Attempting to send message: '{}'", userMessage);  // Debug log
+                //         chatHistory.push_back({
+                //             ChatMessage::Sender::User,
+                //             std::string(inputBuffer)
+                //         });
+                        
+                //         // isThinking = true;
+                //         isThinking.store(true);
+                //         // autoScroll.store(true);  // Re-enable when sending message
+                //         thinkingAnimationTimer = std::chrono::steady_clock::now();
+                        
+                //         // Properly pass a std::string to SendOpenAIRequest with namespace qualification
+                //         aiResponseFuture = std::async(std::launch::async, 
+                //             &UI::ChatWindow::SendOpenAIRequest, userMessage);  // Pass std::string
+                        
+                //         memset(inputBuffer, 0, sizeof(inputBuffer));
+                //     }
+                // }
+
+                // ProcessResponse();
+                ImGui::SameLine();
+                // if (ImGui::Button("Send") || sendMessage) {
+                //     if (strlen(inputBuffer) > 0 && currentNPC) {  // Check if we have an agent
+                //         std::string userMessage = inputBuffer;
+                        
+                //         // Add user message to chat display
+                //         chatHistory.push_back({
+                //             ChatMessage::Sender::User,
+                //             userMessage
+                //         });
+                        
+                //         // Start the async processing through the agent
+                //         isThinking.store(true);
+                //         thinkingAnimationTimer = std::chrono::steady_clock::now();
+                        
+                //         // OLD CODE:
+                //         // aiResponseFuture = std::async(std::launch::async, 
+                //         //     &UI::ChatWindow::SendOpenAIRequest, userMessage);
+                        
+                //         // NEW CODE:
+                //         // Start agent's processing
+                //         aiResponseFuture = std::async(std::launch::async,
+                //             [this, userMessage]() {
+                //                 return currentNPC->ProcessInput(userMessage);
+                //             });
+                        
+                //         memset(inputBuffer, 0, sizeof(inputBuffer));
+                //     }
+                // }
+                // Inside RenderWindow()
                 if (ImGui::Button("Send") || sendMessage) {
-                    if (strlen(inputBuffer) > 0) {
-                        std::string userMessage = inputBuffer;  // Create copy of message
-                        logger::info("Attempting to send message: '{}'", userMessage);  // Debug log
+                    if (strlen(inputBuffer) > 0 && currentNPC) {
+                        std::string userMessage = inputBuffer;
+                        
+                        // Add user message to chat display
                         chatHistory.push_back({
                             ChatMessage::Sender::User,
-                            std::string(inputBuffer)
+                            userMessage
                         });
                         
-                        // isThinking = true;
+                        // Start the async processing
                         isThinking.store(true);
-                        // autoScroll.store(true);  // Re-enable when sending message
                         thinkingAnimationTimer = std::chrono::steady_clock::now();
                         
-                        // Properly pass a std::string to SendOpenAIRequest with namespace qualification
-                        aiResponseFuture = std::async(std::launch::async, 
-                            &UI::ChatWindow::SendOpenAIRequest, userMessage);  // Pass std::string
+                        // Modify this part to avoid using 'this'
+                        aiResponseFuture = std::async(std::launch::async,
+                            [capturedNPC = currentNPC.get(), userMessage]() {
+                                return capturedNPC->ProcessInput(userMessage);
+                            });
                         
                         memset(inputBuffer, 0, sizeof(inputBuffer));
                     }
                 }
 
-                ProcessResponse();
+                // Add agent update call
+                if (currentNPC) {
+                    currentNPC->Update();  // Let agent handle its background tasks
+                }
+
+
             }
             ImGui::End();
 
@@ -780,49 +1028,66 @@ namespace UI {
         }
 
 
-        std::string SendOpenAIRequest(const std::string& userInput) {
+        // std::string SendOpenAIRequest(const std::string& userInput) {
 
-            //Update OpenAI check
+        //     //Update OpenAI check
+        //     if (!UI::Config::OpenAI::initialized.load()) {
+        //         return "I'm not connected to OpenAI yet. Please check your settings.";
+        //     }
+
+        //     try {
+        //         Context::AddMessage("user", userInput);
+
+        //         nlohmann::json chat_request = {
+        //             {"model", "gpt-4o-mini"},
+        //             {"messages", nlohmann::json::array()}
+        //         };
+
+        //         // Single system message combining identity and context
+        //         chat_request["messages"].push_back({
+        //             {"role", "system"},
+        //             {"content", GenerateSystemPrompt() + "\n\n" + GetNPCContext()}
+        //         });
+
+        //         auto history = Context::GetMessageHistory();
+        //         chat_request["messages"].insert(
+        //             chat_request["messages"].end(),
+        //             history.begin(), history.end()
+        //         );
+
+        //         // Log final request
+        //         logger::info("Final OpenAI Request: {}", chat_request.dump(2));
+
+
+        //         auto chat = openai::chat().create(chat_request);
+        //         std::string response = chat["choices"][0]["message"]["content"];
+                
+        //         Context::AddMessage("assistant", response);
+                
+        //         return response;
+        //     }
+        //     catch (const std::exception& e) {
+        //         logger::error("OpenAI request failed: {}", e.what());
+        //         return "I'm sorry, I'm having trouble thinking clearly right now.";
+        //     }
+        // }
+
+        std::string SendOpenAIRequest(const std::string& userInput) {
+            // OLD: Handled all the OpenAI interaction here
+            // NEW: Should delegate to the Agent
+
+            // First check if we have an agent and OpenAI is initialized
+            if (!currentNPC) {
+                return "Error: No active NPC agent";
+            }
             if (!UI::Config::OpenAI::initialized.load()) {
                 return "I'm not connected to OpenAI yet. Please check your settings.";
             }
 
-            try {
-                Context::AddMessage("user", userInput);
-
-                nlohmann::json chat_request = {
-                    {"model", "gpt-4o-mini"},
-                    {"messages", nlohmann::json::array()}
-                };
-
-                // Single system message combining identity and context
-                chat_request["messages"].push_back({
-                    {"role", "system"},
-                    {"content", GenerateSystemPrompt() + "\n\n" + GetNPCContext()}
-                });
-
-                auto history = Context::GetMessageHistory();
-                chat_request["messages"].insert(
-                    chat_request["messages"].end(),
-                    history.begin(), history.end()
-                );
-
-                // Log final request
-                logger::info("Final OpenAI Request: {}", chat_request.dump(2));
-
-
-                auto chat = openai::chat().create(chat_request);
-                std::string response = chat["choices"][0]["message"]["content"];
-                
-                Context::AddMessage("assistant", response);
-                
-                return response;
-            }
-            catch (const std::exception& e) {
-                logger::error("OpenAI request failed: {}", e.what());
-                return "I'm sorry, I'm having trouble thinking clearly right now.";
-            }
+            // Use the Agent's ProcessInput method
+            return currentNPC->ProcessInput(userInput);
         }
+
 
         void ProcessResponse() {
             if (!isThinking.load() || !aiResponseFuture.valid()) {  // Add .load()
@@ -841,25 +1106,25 @@ namespace UI {
             }
         }
 
-        namespace Context {
-            void AddMessage(const std::string& role, const std::string& content) {
-                nlohmann::json message = {
-                    {"role", role},
-                    {"content", content}
-                };
+        // namespace Context {
+        //     void AddMessage(const std::string& role, const std::string& content) {
+        //         nlohmann::json message = {
+        //             {"role", role},
+        //             {"content", content}
+        //         };
                 
-                messages.push_back(message);
+        //         messages.push_back(message);
                 
-                if (messages.size() > UI::Config::Chat::maxMessages) {
-                    messages.erase(messages.begin());
-                }
+        //         if (messages.size() > UI::Config::Chat::maxMessages) {
+        //             messages.erase(messages.begin());
+        //         }
 
-            }
+        //     }
 
-            nlohmann::json GetMessageHistory() {
-                return messages;
-            }
-        }
+        //     nlohmann::json GetMessageHistory() {
+        //         return messages;
+        //     }
+        // }
     }
 
     // In UI.cpp, update the Settings::RenderMenu function
