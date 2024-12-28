@@ -314,6 +314,12 @@ namespace TESSERACT::HoldingQuest {
         return objectNames;
     }
 
+
+    // DialogueView Function
+
+    // Dialogue Topic Function
+
+
     // Papyrus-exposed versions
     void __stdcall AliasExtractorPapyrus(RE::StaticFunctionTag*, RE::TESQuest* quest) {
         AliasExtractor(quest);

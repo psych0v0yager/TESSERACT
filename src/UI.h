@@ -47,6 +47,7 @@ namespace UI {
         namespace OpenAI {
             inline std::string baseUrl = "";
             inline std::string apiKey = "";
+            inline std::string model = "gpt-4o-mini";  // Add default model
             inline std::atomic<bool> initialized{false};
             
             // Save/Load OpenAI specific settings
@@ -154,6 +155,8 @@ namespace UI {
         inline std::atomic<bool> autoScroll{true};
         inline std::vector<ChatMessage> chatHistory;
         inline char inputBuffer[1024] = {0};
+        inline char formIdBuffer[9] = {0};  // Move it here, at namespace scope
+
         
         // Async state
         inline std::atomic<bool> isThinking{false};

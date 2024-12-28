@@ -88,6 +88,30 @@ namespace UI {
             }
         }
 
+        // void EnsureConfigDirectory() {
+        //     try {
+        //         // Get Skyrim's Data folder path
+        //         auto dataPath = Skyrim::Get()->GetDataPath();
+                
+        //         // Construct the path for our config
+        //         auto configDir = dataPath / "SKSE" / "Plugins" / "TESSERACT";
+                
+        //         // Create directory for new configs (this will go to Overwrite in MO2)
+        //         if (!std::filesystem::exists(configDir)) {
+        //             std::filesystem::create_directories(configDir);
+        //             logger::info("Created config directory at: {}", configDir.string());
+        //         }
+
+        //         CONFIG_PATH = (configDir / "config.json").string();
+        //         logger::info("Config path set to: {}", CONFIG_PATH);
+
+        //     } catch (const std::exception& e) {
+        //         lastError = std::format("Failed to create config directory: {}", e.what());
+        //         loadSuccess = false;
+        //         logger::error("{}", lastError);
+        //     }
+        // }
+
         void LoadConfig() {
             try {
                 // Reset status
@@ -194,7 +218,8 @@ namespace UI {
                 if (!baseUrl.empty() || !apiKey.empty()) {
                     config["openai"] = {
                         {"baseUrl", baseUrl},
-                        {"apiKey", apiKey}
+                        {"apiKey", apiKey},
+                        {"model", model}  // Add model here
                     };
                 }
             }
@@ -207,6 +232,9 @@ namespace UI {
                     }
                     if (openai.contains("apiKey")) {
                         apiKey = openai["apiKey"].get<std::string>();
+                    }
+                    if (openai.contains("model")) {
+                        model = openai["model"].get<std::string>();
                     }
                 }
             }
@@ -754,7 +782,7 @@ namespace UI {
 
             // Load the atomic IsOpen value into a local bool
             bool isOpen = chatWindow->IsOpen.load();
-            inline char formIdBuffer[9] = {0};  // 8 chars for hex + null terminator
+            // inline char formIdBuffer[9] = {0};  // 8 chars for hex + null terminator
 
             if (ImGui::Begin("Dialogue##ChatWindow", &isOpen, ImGuiWindowFlags_MenuBar)) {
                 if (ImGui::BeginMenuBar()) {
@@ -769,81 +797,183 @@ namespace UI {
                     //     ImGui::EndMenu();
                     // }
 
+                    // if (ImGui::BeginMenu("Options")) {
+                    //     if (ImGui::MenuItem("Clear Chat")) {
+                    //         chatHistory.clear();
+                    //     }
+
+                    //     // Add a separator before debug options
+                    //     ImGui::Separator();
+                    //     ImGui::Text("Debug Options");
+
+                    //     // Form ID input field
+                    //     if (ImGui::InputText("Form ID", formIdBuffer, sizeof(formIdBuffer), 
+                    //                         ImGuiInputTextFlags_CharsHexadecimal)) {
+                    //         // Input is being modified
+                    //     }
+                        
+                    //     if (ImGui::IsItemHovered()) {
+                    //         ImGui::SetTooltip("Enter NPC Form ID in hex (e.g., 00000007 for player)\n"
+                    //                         "You can find Form IDs using the console command 'help <name>'");
+                    //     }
+
+                    //     // Button to connect to NPC
+                    //     if (ImGui::Button("Connect to NPC")) {
+                    //         try {
+                    //             // Convert hex string to integer
+                    //             unsigned int formId;
+                    //             std::stringstream ss;
+                    //             ss << std::hex << formIdBuffer;
+                    //             ss >> formId;
+
+                    //             // Look up the NPC
+                    //             if (auto form = RE::TESForm::LookupByID(formId)) {
+                    //                 if (auto npc = form->As<RE::Actor>()) {
+                    //                     // We found the NPC! Create a new agent
+                    //                     logger::info("Found NPC: {}", npc->GetName());
+                                        
+                    //                     // Close existing agent if any
+                    //                     if (currentNPC) {
+                    //                         currentNPC.reset();
+                    //                     }
+
+                    //                     // Create new agent for this NPC
+                    //                     currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(npc, "test");
+                                        
+                    //                     // Clear existing chat and add greeting
+                    //                     chatHistory.clear();
+                    //                     chatHistory.push_back({
+                    //                         ChatMessage::Sender::NPC,
+                    //                         "Hello, I am " + std::string(npc->GetName())
+                    //                     });
+                    //                 } else {
+                    //                     logger::error("Form {} is not an Actor", formId);
+                    //                 }
+                    //             } else {
+                    //                 logger::error("Could not find Form with ID {}", formId);
+                    //             }
+                    //         }
+                    //         catch (const std::exception& e) {
+                    //             logger::error("Error connecting to NPC: {}", e.what());
+                    //         }
+                    //     }
+
+                    //     // Add status text showing current NPC
+                    //     if (currentNPC) {
+                    //         ImGui::TextColored(
+                    //             ImVec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green text
+                    //             "Connected to: %s", 
+                    //             currentNPC->GetNPC()->GetName()
+                    //         );
+                    //     } else {
+                    //         ImGui::TextColored(
+                    //             ImVec4(0.7f, 0.7f, 0.7f, 1.0f),  // Gray text
+                    //             "Not connected to any NPC"
+                    //         );
+                    //     }
+
+                    //     if (ImGui::MenuItem("Close")) {
+                    //         isOpen = false;
+                    //     }
+                        
+                    //     ImGui::EndMenu();
+                    // }
+
+
                     if (ImGui::BeginMenu("Options")) {
+                        // Basic chat management section
                         if (ImGui::MenuItem("Clear Chat")) {
                             chatHistory.clear();
                         }
 
-                        // Add a separator before debug options
+                        // Debug section with clear visual separation
                         ImGui::Separator();
                         ImGui::Text("Debug Options");
 
-                        // Form ID input field
+                        // Form ID input section - This lets users specify which NPC to connect to
                         if (ImGui::InputText("Form ID", formIdBuffer, sizeof(formIdBuffer), 
                                             ImGuiInputTextFlags_CharsHexadecimal)) {
-                            // Input is being modified
+                            // We don't need to do anything here - the buffer updates automatically
                         }
                         
+                        // Help tooltip - Explains how to use the Form ID input
                         if (ImGui::IsItemHovered()) {
                             ImGui::SetTooltip("Enter NPC Form ID in hex (e.g., 00000007 for player)\n"
                                             "You can find Form IDs using the console command 'help <name>'");
                         }
 
-                        // Button to connect to NPC
+                        // Connection status - Show this before the connect button so users know the current state
+                        if (currentNPC && currentNPC->GetNPC()) {  // Double-check both the agent and NPC exist
+                            ImGui::TextColored(
+                                ImVec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green for connected
+                                "Connected to: %s", 
+                                currentNPC->GetNPC()->GetName()
+                            );
+                        } else {
+                            ImGui::TextColored(
+                                ImVec4(0.7f, 0.7f, 0.7f, 1.0f),  // Gray for disconnected
+                                "Not connected to any NPC"
+                            );
+                        }
+
+                        // Connect button and NPC lookup logic
                         if (ImGui::Button("Connect to NPC")) {
                             try {
+                                // First validate that we have input
+                                if (strlen(formIdBuffer) == 0) {
+                                    logger::warn("No Form ID entered");
+                                    return;
+                                }
+
                                 // Convert hex string to integer
                                 unsigned int formId;
                                 std::stringstream ss;
                                 ss << std::hex << formIdBuffer;
                                 ss >> formId;
 
-                                // Look up the NPC
-                                if (auto form = RE::TESForm::LookupByID(formId)) {
-                                    if (auto npc = form->As<RE::Actor>()) {
-                                        // We found the NPC! Create a new agent
-                                        logger::info("Found NPC: {}", npc->GetName());
-                                        
-                                        // Close existing agent if any
-                                        if (currentNPC) {
-                                            currentNPC.reset();
-                                        }
-
-                                        // Create new agent for this NPC
-                                        currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(npc, "test");
-                                        
-                                        // Clear existing chat and add greeting
-                                        chatHistory.clear();
-                                        chatHistory.push_back({
-                                            ChatMessage::Sender::NPC,
-                                            "Hello, I am " + std::string(npc->GetName())
-                                        });
-                                    } else {
-                                        logger::error("Form {} is not an Actor", formId);
-                                    }
-                                } else {
-                                    logger::error("Could not find Form with ID {}", formId);
+                                if (ss.fail()) {
+                                    logger::error("Invalid Form ID format");
+                                    return;
                                 }
+
+                                // Look up the NPC with careful null checking
+                                auto form = RE::TESForm::LookupByID(formId);
+                                if (!form) {
+                                    logger::error("Could not find Form with ID {:X}", formId);
+                                    return;
+                                }
+
+                                auto npc = form->As<RE::Actor>();
+                                if (!npc) {
+                                    logger::error("Form {:X} is not an Actor", formId);
+                                    return;
+                                }
+
+                                // We found a valid NPC - now we can safely create the agent
+                                logger::info("Found NPC: {}", npc->GetName());
+                                
+                                // Clean up existing agent before creating new one
+                                if (currentNPC) {
+                                    currentNPC.reset();
+                                }
+
+                                // Create new agent and initialize chat
+                                currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(npc, "test");
+                                chatHistory.clear();
+                                chatHistory.push_back({
+                                    ChatMessage::Sender::NPC,
+                                    "Hello, I am " + std::string(npc->GetName())
+                                });
                             }
                             catch (const std::exception& e) {
                                 logger::error("Error connecting to NPC: {}", e.what());
                             }
                         }
 
-                        // Add status text showing current NPC
-                        if (currentNPC) {
-                            ImGui::TextColored(
-                                ImVec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green text
-                                "Connected to: %s", 
-                                currentNPC->GetNPC()->GetName()
-                            );
-                        } else {
-                            ImGui::TextColored(
-                                ImVec4(0.7f, 0.7f, 0.7f, 1.0f),  // Gray text
-                                "Not connected to any NPC"
-                            );
-                        }
-
+                        // Add another separator before window management
+                        ImGui::Separator();
+                        
+                        // Window management at the end
                         if (ImGui::MenuItem("Close")) {
                             isOpen = false;
                         }
@@ -851,9 +981,14 @@ namespace UI {
                         ImGui::EndMenu();
                     }
 
+                    // ImGui::EndMenuBar();
+
+
 
                     ImGui::EndMenuBar();
                 }
+
+
 
                 // Add OpenAI connection status check
                 if (!UI::Config::OpenAI::initialized.load()) {
@@ -1001,10 +1136,13 @@ namespace UI {
                         thinkingAnimationTimer = std::chrono::steady_clock::now();
                         
                         // Modify this part to avoid using 'this'
-                        aiResponseFuture = std::async(std::launch::async,
-                            [capturedNPC = currentNPC.get(), userMessage]() {
-                                return capturedNPC->ProcessInput(userMessage);
-                            });
+                        // aiResponseFuture = std::async(std::launch::async,
+                        //     [capturedNPC = currentNPC.get(), userMessage]() {
+                        //         return capturedNPC->ProcessInput(userMessage);
+                        //     });
+
+                         // Just call ProcessInput directly - no async wrapper
+                        currentNPC->ProcessInput(userMessage);
                         
                         memset(inputBuffer, 0, sizeof(inputBuffer));
                     }
@@ -1013,8 +1151,22 @@ namespace UI {
                 // Add agent update call
                 if (currentNPC) {
                     currentNPC->Update();  // Let agent handle its background tasks
+                    // Check for new responses
+                    if (!currentNPC->latestResponse.empty()) {
+                        // We have a new response to display
+                        chatHistory.push_back({
+                            ChatMessage::Sender::NPC,
+                            currentNPC->latestResponse
+                        });
+                        currentNPC->latestResponse.clear();  // Clear it so we don't display it again
+                        isThinking.store(false);  // Stop thinking animation
+                        autoScroll.store(true);   // Scroll to show new message
+                    }
+
                 }
 
+                // Handle UI response processing
+                // ProcessResponse();
 
             }
             ImGui::End();
@@ -1201,13 +1353,15 @@ namespace UI {
 
             char baseUrl[1024] = "";
             char apiKey[1024] = "";
+            char model[1024] = "";  // Add model buffer
             
             strcpy_s(baseUrl, sizeof(baseUrl), Config::OpenAI::baseUrl.c_str());
             strcpy_s(apiKey, sizeof(apiKey), Config::OpenAI::apiKey.c_str());
+            strcpy_s(model, sizeof(model), Config::OpenAI::model.c_str());  // Copy model
 
             bool urlChanged = ImGui::InputText("Base URL", baseUrl, sizeof(baseUrl));
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("OpenAI API endpoint URL.\n"
+                ImGui::SetTooltip("Model API endpoint URL.\n"
                                 "Leave empty for default OpenAI endpoint.");
             }
 
@@ -1218,8 +1372,16 @@ namespace UI {
                                 "Required for AI functionality.");
             }
 
+            bool modelChanged = ImGui::InputText("Model", model, sizeof(model));  // Add model input
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Model that you are using (e.g., gpt-4o-mini, deepseek-chat).\n"
+                                "Leave empty for default model (gpt-4o-mini).");
+            }
+
+
             if (urlChanged) Config::OpenAI::baseUrl = baseUrl;
             if (keyChanged) Config::OpenAI::apiKey = apiKey;
+            if (modelChanged) Config::OpenAI::model = model;  // Update model if changed
 
             if (ImGui::Button(Config::OpenAI::initialized.load() ? 
                             "Reconnect to OpenAI" : "Connect to OpenAI")) {

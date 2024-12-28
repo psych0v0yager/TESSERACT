@@ -13,7 +13,7 @@ namespace TESSERACT::Agent::Communication {
         try {
             // Create the request structure
             nlohmann::json chat_request = {
-                {"model", "gpt-4o-mini"},
+                {"model", UI::Config::OpenAI::model},
                 {"messages", nlohmann::json::array()}
             };
 
@@ -26,11 +26,11 @@ namespace TESSERACT::Agent::Communication {
                 });
             }
 
-            // Add the user's new input
-            chat_request["messages"].push_back({
-                {"role", "user"},
-                {"content", userInput}
-            });
+            // // Add the user's new input
+            // chat_request["messages"].push_back({
+            //     {"role", "user"},
+            //     {"content", userInput}
+            // });
 
             // Log the request for debugging
             logger::info("Final OpenAI Request: {}", chat_request.dump(2));
@@ -78,7 +78,7 @@ namespace TESSERACT::Agent::Communication {
         
         return std::format(
             "Current state: {}"
-            "Health: {:.0f}%\n"
+            // "Health: {:.0f}%\n"
             "Location: {}\n"
             "Time: {}\n",
             isInCombat ? "In Combat!" : 
@@ -98,6 +98,7 @@ namespace TESSERACT::Agent::Memory {
     // This portion creates and stores the memory objects
     
     bool calculateImportance = false;
+    int maxMemories = 50;
 
     // Function to create memory from raw strings
     MemoryEntry CreateFromString(const std::string& content, const std::string& role) {
@@ -225,6 +226,9 @@ namespace TESSERACT::Agent {
                     
                     // Store this response as a memory
                     AddMemory("assistant", response);
+
+                    // Update the latest line
+                    latestResponse = response;  // <--- crucial line
                     
                     // Mark that we're done processing this thought
                     isProcessingUpdate.store(false);

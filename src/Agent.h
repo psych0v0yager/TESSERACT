@@ -73,8 +73,10 @@ namespace TESSERACT::Agent {
     // The virtual functions allow us to create specialized types of agents later.
     class SubAgent {
     public:
-        SubAgent(RE::Actor* npc, const std::string& role) 
-            : npc(npc), agentRole(role) {}
+        // SubAgent(RE::Actor* npc, const std::string& role) 
+        //     : npc(npc), agentRole(role) {}
+        
+        SubAgent(RE::Actor* npc, const std::string& role);
 
         // Core functionality
         virtual std::string ProcessInput(const std::string& input);
@@ -82,7 +84,10 @@ namespace TESSERACT::Agent {
 
         // Helper functions
         RE::Actor* GetNPC() const { return npc; } 
-        
+
+        // Final message for UI
+        std::string latestResponse;
+
     protected:
         RE::Actor* npc;
         std::string agentRole;  // e.g., "id", "ego", "superego", "basal-ganglia"
