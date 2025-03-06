@@ -696,10 +696,61 @@ namespace UI {
             // OLD CODE
             // Now create an Agent object, and store the pointer
             currentNPC = std::make_unique<TESSERACT::Agent::SubAgent>(targetNpc, "test");
-            // chatWindow->IsOpen = true;
+            chatWindow->IsOpen = true;
             chatHistory.clear();
             // isThinking = false;
             isThinking.store(false);
+
+            // Add the npc to the prisoner faction to keep them still\
+            // TODO. This can lead to bugs if the NPC is already a prisoner. But im 80/20ing it rn
+            // if (auto prisonerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0xAA784)) {
+            //     targetNpc->AddToFaction(prisonerFaction, 1);
+            //     logger::info("NPC added to prisoner faction");
+
+            // }
+
+            // Store the NPC's original speed (so we can restore it later)
+            // float originalSpeed = targetNpc->GetActorBase()->GetActorValue(RE::ActorValue::kSpeedMult);
+            if (auto* process = targetNpc->GetActorRuntimeData().currentProcess) {
+                // process->SetMovementFlag(RE::AI_Process_Movement::kDisabled, true);
+                targetNpc->PauseCurrentDialogue();
+                targetNpc->EndDialogue();
+                // targetNpc->EvaluatePackage(false, true);
+                targetNpc->InitiateDoNothingPackage();
+                logger::info("Do nothing worked");
+                targetNpc->EvaluatePackage(false, true);
+                // targetNpc->ResetAI();
+                // targetNpc->SetNoAI(true);  // Disable AI
+                // targetNpc->EnableAI(false);
+            }
+
+
+            if (auto idleForm = RE::TESForm::LookupByEditorID<RE::TESIdleForm>("idlesalute")) {
+                // Force the idle animation
+                // npc->GetCharController()->GetActorController()->PlayIdle(npc, idleForm);
+                targetNpc->GetActorRuntimeData().currentProcess->PlayIdle(targetNpc, idleForm, nullptr);
+                logger::info("Forced idle animation on NPC");
+            } else {
+                logger::error("Could not find DialogueStandingStart idle form");
+            }
+
+            // if (auto idleForm = RE::TESForm::LookupByEditorID<RE::TESIdleForm>("idlesalute")) {
+            //     // Force the idle animation
+            //     // npc->GetCharController()->GetActorController()->PlayIdle(npc, idleForm);
+            //     targetNpc->GetActorRuntimeData().currentProcess->PlayIdle(targetNpc, idleForm, nullptr);
+            //     logger::info("Forced idle animation on NPC");
+            // } else {
+            //     logger::error("Could not find DialogueStandingStart idle form");
+            // }
+
+            // if (auto idleForm = RE::TESForm::LookupByEditorID<RE::TESIdleForm>("idlesilentbow")) {
+            //     // Force the idle animation
+            //     // npc->GetCharController()->GetActorController()->PlayIdle(npc, idleForm);
+            //     targetNpc->GetActorRuntimeData().currentProcess->PlayIdle(targetNpc, idleForm, nullptr);
+            //     logger::info("Forced idle animation on NPC");
+            // } else {
+            //     logger::error("Could not find DialogueStandingStart idle form");
+            // }
 
             if (currentNPC) {
                 // OLD CODE
@@ -707,7 +758,7 @@ namespace UI {
                 // OLD CODE
                 chatHistory.push_back({
                     ChatMessage::Sender::NPC,
-                    "Hello, how can I help you today?"
+                    TESSERACT::Agent::Communication::GenerateSystemPrompt(targetNpc)
                 });
             }
         }
@@ -717,6 +768,14 @@ namespace UI {
             // OLD CODE
             // currentNPC = nullptr;
             // OLD CODE
+            if (currentNPC) {  // Check if we have a valid agent
+                if (auto* npc = currentNPC->GetNPC()) {  // Check if we got a valid NPC
+                    if (auto prisonerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0xAA784)) {
+                        npc->RemoveFromFaction(prisonerFaction);
+                        logger::info("NPC removed from prisoner faction");
+                    }
+                }
+            }
             currentNPC.reset();  // Properly destroy the agent
             chatHistory.clear();
             // OLD CODE

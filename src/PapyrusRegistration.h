@@ -16,6 +16,7 @@ namespace TESSERACT {
         vm->RegisterFunction("GetTravelPackage", "TESSERACT", AgentFunctions::GetTravelPackagePapyrus);
 
         // HoldingQuest Functions
+        vm->RegisterFunction("OpenChatWindow", "TESSERACT", HoldingQuest::OpenChatWindowPapyrus);
         vm->RegisterFunction("ExtractRefs", "TESSERACT", HoldingQuest::AliasExtractorPapyrus);
         vm->RegisterFunction("ExtractRefsPlaceholder", "TESSERACT", HoldingQuest::AliasExtractorPlaceholderPapyrus);
         vm->RegisterFunction("FastQuestFill", "TESSERACT", HoldingQuest::FastQuestFillPapyrus);
@@ -23,7 +24,7 @@ namespace TESSERACT {
         vm->RegisterFunction("BatchUpcastObj2Actor", "TESSERACT", HoldingQuest::BatchUpcastObj2ActorPapyrus);
         vm->RegisterFunction("BatchExtractNames", "TESSERACT", HoldingQuest::BatchExtractNamesPapyrus);
         vm->RegisterFunction("NaiveQuestFill", "TESSERACT", HoldingQuest::NaiveQuestFillPapyrus);
-        
+
         // Utility Functions
         vm->RegisterFunction("GetSpell", "TESSERACT", Utils::GetSpellPapyrus);
         vm->RegisterFunction("ForceRefToAlias", "TESSERACT", Utils::ForceRefToAliasPapyrus);

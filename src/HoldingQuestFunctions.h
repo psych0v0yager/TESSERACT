@@ -45,6 +45,9 @@ namespace TESSERACT::HoldingQuest {
     std::vector<RE::Actor*> BatchUpcastObj2Actor(std::vector<RE::TESObjectREFR*> objectList);
     std::vector<std::string> BatchExtractNames(std::vector<RE::TESObjectREFR*> objectList);
 
+    // DialogueViewFunctions
+    void __stdcall OpenChatWindowPapyrus(RE::StaticFunctionTag*, RE::Actor* actor);
+
     // Papyrus-exposed versions
     void __stdcall AliasExtractorPapyrus(RE::StaticFunctionTag*, RE::TESQuest* quest);
     void __stdcall AliasExtractorPlaceholderPapyrus(RE::StaticFunctionTag*, RE::TESQuest* quest);

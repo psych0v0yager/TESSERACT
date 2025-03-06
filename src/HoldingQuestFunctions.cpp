@@ -170,6 +170,12 @@ namespace TESSERACT::HoldingQuest {
             // If it's an actor (not a placeholder) and no longer in scan range
             if (placeholderSet.find(currentRef) == placeholderSet.end() && 
                 newActorsSet.find(currentRef) == newActorsSet.end()) {
+                // Remove from faction
+                if (auto actor = currentRef->As<RE::Actor>()) {
+                    if (auto faction = RE::TESForm::LookupByEditorID<RE::TESFaction>("TESSERACT_HoldingQuest_Faction")) {
+                        actor->RemoveFromFaction(faction);
+                    }
+                }
                 // Replace with corresponding placeholder
                 Utils::ForceRefToAlias(quest, i, placeholderContents[i]);
                 holdingContents[i] = placeholderContents[i];
@@ -194,6 +200,14 @@ namespace TESSERACT::HoldingQuest {
                     holdingContents[i] = newActor;
                     holdingContentsSet.erase(holdingContents[i]);
                     holdingContentsSet.insert(newActor);
+                    
+                    // Add to faction after adding to alias
+                    if (auto actor = newActor->As<RE::Actor>()) {
+                        if (auto faction = RE::TESForm::LookupByEditorID<RE::TESFaction>("TESSERACT_HoldingQuestFaction")) {
+                            actor->AddToFaction(faction, 0);
+                        }
+                    }
+                    
                     break;
                 }
             }
@@ -318,7 +332,10 @@ namespace TESSERACT::HoldingQuest {
     // DialogueView Function
 
     // Dialogue Topic Function
-
+    void __stdcall OpenChatWindowPapyrus(RE::StaticFunctionTag*, RE::Actor* actor) { 
+            logger::info("c++ was called");
+            UI::ChatWindow::Open(actor); 
+    }
 
     // Papyrus-exposed versions
     void __stdcall AliasExtractorPapyrus(RE::StaticFunctionTag*, RE::TESQuest* quest) {
@@ -350,4 +367,5 @@ namespace TESSERACT::HoldingQuest {
     void __stdcall BatchExtractNamesPapyrus(RE::StaticFunctionTag*, std::vector<RE::TESObjectREFR*> objectList) {
         BatchExtractNames(objectList);
     }
+
 }
